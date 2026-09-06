@@ -149,17 +149,38 @@ una paleta interna del firmware.
 
 ### Catalogo
 
-El APK guarda 18 modos, cada uno con sus variantes de paleta y sentido.
-**Los numeros son del fabricante; los nombres son deduccion propia**, a
-partir de lo que describe la app:
+Los nombres son los **oficiales del fabricante**: salen del array
+`scene_magic` de `res/values/arrays.xml`, dentro del APK. Sus 18
+entradas van en el mismo orden que los modos.
+
+Que el orden es correcto se comprueba solo: la entrada 17 es "curtain
+up/down", y en `Mode.format()` el modo 17 es justo el que lleva la
+bandera de telon arriba o abajo.
 
 | | | | |
 |---|---|---|---|
-| 1 desplazamiento | 2 persecucion | 3 salto | 4 respiracion |
-| 5 flujo | 6 onda | 7 barrido | 8 meteoro |
-| 9 estela | 10 apilado | 11 rebote | 12 destello |
-| 13 parpadeo | 14 arcoiris | 15 estroboscopio | 16 alternancia |
-| 17 telon | 18 fundido | | |
+| 1 fade | 2 jump | 3 breathe | 4 flash |
+| 5 meteor | 6 stack | 7 float | 8 follow spot |
+| 9 wave | 10 water | 11 rainbow | 12 blink |
+| 13 bounce | 14 shuttle | 15 twinkle | 16 on/off |
+| 17 curtain | 18 alternate | | |
+
+En tres modos el bit 6 no es el sentido de avance:
+
+| Modo | Que cambia el bit 6 |
+|---|---|
+| 14 shuttle | un color o varios |
+| 16 on/off | alternancia |
+| 17 curtain | telon arriba o abajo |
+
+### Dos trampas al lanzar un modo
+
+1. **Un comando de color lo cancela.** El opcode 03 devuelve la lampara
+   a color fijo. Lanza el modo y no mandes nada mas.
+2. **No desconectes justo despues.** La escritura es sin respuesta: la
+   llamada vuelve al instante porque el sistema la encola, no porque
+   haya salido. Cerrar la conexion en ese momento pierde el paquete sin
+   ningun aviso. Espera un segundo largo.
 
 ## Limite de velocidad
 

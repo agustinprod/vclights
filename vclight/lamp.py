@@ -134,6 +134,15 @@ class Lamp:
         Estos efectos se mueven a lo largo de la tira y los calcula la
         propia lampara, asi que no gastan ancho de banda BLE ni se cortan
         si el portatil se aleja.
+
+        Dos cuidados que cuestan una tarde si no se saben:
+
+        - Un comando de color posterior cancela el modo. Lanza el modo y
+          no mandes nada mas.
+        - No desconectes justo despues. La escritura es sin respuesta y
+          vuelve al instante porque el sistema la encola; si cierras la
+          conexion en ese momento, el paquete se pierde sin avisar.
+          Espera al menos un segundo.
         """
         await self.send(p.cmd_mode(mode_id, speed, brightness, colors, direction, section))
 

@@ -91,23 +91,45 @@ OP_PELIGROSOS = {0xF0, 0xFE, 0xFF}
 
 
 # --------------------------------------------------------------- modos ----
-# El firmware lleva 18 efectos dinamicos. Se mueven solos: la tira es
-# direccionable (de ahi que existan IcLength e IcOrder), asi que el
-# movimiento lo calcula la lampara, no hace falta mandar pixel a pixel.
+# El firmware lleva 18 efectos dinamicos. En las lamparas magic se
+# desplazan a lo largo de la tira; en las demas se ven al unisono.
 #
-# AVISO: estos nombres son deduccion propia a partir del comportamiento
-# que describe la app. El APK solo guarda numeros del 1 al 18.
+# Los nombres son los OFICIALES del fabricante. Salen de los recursos
+# del APK, del array scene_magic de res/values/arrays.xml, cuyas 18
+# entradas van en el mismo orden que los modos.
+#
+# Comprobacion de que el orden es el correcto: la entrada 17 es
+# "curtain up/down", y en Mode.format() el modo 17 es justo el que lleva
+# la bandera de telon arriba o abajo. Cuadran.
 
 MODES = {
-    1:  "desplazamiento",   2:  "persecucion",    3:  "salto",
-    4:  "respiracion",      5:  "flujo",          6:  "onda",
-    7:  "barrido",          8:  "meteoro",        9:  "estela",
-    10: "apilado",          11: "rebote",         12: "destello",
-    13: "parpadeo",         14: "arcoiris",       15: "estroboscopio",
-    16: "alternancia",      17: "telon",          18: "fundido",
+    1:  "fade",         # fundido entre colores
+    2:  "jump",         # salto brusco de color
+    3:  "breathe",      # respiracion
+    4:  "flash",        # destello
+    5:  "meteor",       # meteoro con cola
+    6:  "stack",        # se van apilando los LEDs
+    7:  "float",        # flotar
+    8:  "follow spot",  # foco perseguidor
+    9:  "wave",         # onda
+    10: "water",        # agua corriendo
+    11: "rainbow",      # arcoiris
+    12: "blink",        # parpadeo
+    13: "bounce",       # rebote de extremo a extremo
+    14: "shuttle",      # vaiven; su bandera cambia entre un color y varios
+    15: "twinkle",      # centelleo aleatorio
+    16: "on/off",       # encendido y apagado; su bandera es la alternancia
+    17: "curtain",      # telon que sube o baja; la bandera elige el sentido
+    18: "alternate",    # alternancia entre dos grupos
 }
 
-# Rango de los parametros continuos, tal como los mandan los sliders de la app.
+# Modos cuyo bit 6 no es el sentido de avance, sino otra cosa.
+BANDERA_ESPECIAL = {
+    14: "un color o varios",
+    16: "alternancia",
+    17: "telon arriba o abajo",
+}
+
 SPEED_MAX      = 100
 BRIGHTNESS_MAX = 100
 

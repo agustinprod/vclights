@@ -78,8 +78,13 @@ Si quieres ver un efecto recorrer la tira, lanza un modo del firmware y
 **déjalo correr**: cualquier comando de color posterior lo cancela.
 
 ```bash
-python -m vclight mode 1 --speed 40   # y no mandes nada más
+python -m vclight mode 5 --speed 50   # meteoro, y no mandes nada más
 ```
+
+Y no cierres la conexión justo después de mandar el modo. La escritura
+es *sin respuesta*: la llamada vuelve al instante porque el sistema la
+encola, no porque haya salido. Desconectar en ese momento pierde el
+paquete en silencio.
 
 ## Saber si tu lámpara es direccionable
 
@@ -122,9 +127,11 @@ Comprobado en macOS 25.5 con dos lámparas a la vez. La codificación de
 paletas reproduce byte a byte los literales del APK, así que la lectura
 del protocolo es correcta.
 
-Lo que sigue abierto: el significado de cada índice de la paleta interna,
-los parámetros del opcode `10`, y los nombres oficiales de los modos —
-los de este repositorio son deducción propia, el APK solo guarda números.
+Los nombres de los 18 modos son los oficiales del fabricante, sacados de
+los recursos del APK.
+
+Lo que sigue abierto: el significado de cada índice de la paleta interna
+y los parámetros del opcode `10`.
 
 ## Trabajo previo
 

@@ -76,10 +76,12 @@ async def cmd_find(args):
 
 async def cmd_modes(args):
     print("Modos internos del firmware (opcode 07).")
-    print("Los nombres son deduccion propia: el APK solo guarda numeros.\n")
+    print("Nombres oficiales, del array scene_magic del APK.\n")
     for i, nombre in p.MODES.items():
-        print(f"  {i:>2}  {nombre}")
-    print("\nBanderas: --direction invierte el sentido, --section lo parte por tramos.")
+        extra = p.BANDERA_ESPECIAL.get(i, "")
+        print(f"  {i:>2}  {nombre:<12}" + (f"  --direction cambia: {extra}" if extra else ""))
+    print("\n--direction invierte el sentido de avance, --section lo parte por tramos.")
+    print("Un comando de color posterior cancela el modo: lanzalo y no mandes nada mas.")
 
 
 async def cmd_mode(args):
@@ -88,6 +90,10 @@ async def cmd_mode(args):
         await g.mode(args.id, speed=args.speed, brightness=args.brightness,
                      colors=tuple(args.colors), direction=args.direction,
                      section=args.section)
+        # La escritura es sin respuesta: vuelve al instante porque el
+        # sistema la encola. Si desconectamos aqui mismo, el paquete se
+        # puede perder antes de salir. Un segundo basta para que salga.
+        await asyncio.sleep(1.0)
         print(f"modo {args.id} ({p.MODES[args.id]}) lanzado; sigue solo en la lampara")
 
 
