@@ -69,9 +69,31 @@ asyncio.run(main())
 
 Los modos del firmware son los únicos que producen movimiento **dentro**
 de una lámpara: no existe ningún comando para dirigir un LED concreto.
-Desde fuera solo se puede pintar la lámpara entera de un color. Las
-animaciones propias compensan con control fino del color y del ritmo, y
-pueden desplazar un efecto **entre** varias lámparas.
+Desde fuera solo se puede pintar la lámpara entera de un color, así que
+cualquier animación propia se ve al unísono en toda la tira. Compensan
+con control fino del color y del ritmo, y pueden desplazar un efecto
+**entre** varias lámparas.
+
+Si quieres ver un efecto recorrer la tira, lanza un modo del firmware y
+**déjalo correr**: cualquier comando de color posterior lo cancela.
+
+```bash
+python -m vclight mode 1 --speed 40   # y no mandes nada más
+```
+
+## Saber si tu lámpara es direccionable
+
+La lámpara lo publica en su propio anuncio, sin necesidad de conectar.
+`python -m vclight scan` lo traduce:
+
+```
+  -63 dBm  5BF1A60D-…
+           LIGHT_MAGIC / tira  direccionable   cerca, 1 a 3 m
+```
+
+Solo los grupos `LIGHT_MAGIC`, `LIGHT_MAGIC_W` y `LIGHT_MAGIC_CW` llevan
+LEDs direccionables. En los demás los modos del firmware funcionan, pero
+se ven a la vez en toda la lámpara porque no hay nada que recorrer.
 
 ## La lámpara no confirma nada
 

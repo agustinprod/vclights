@@ -5,6 +5,8 @@
     python -m vclight modes             lista los 18 modos del firmware
     python -m vclight mode 8 --speed 70 lanza un modo del firmware
     python -m vclight fx fire 60        lanza una animacion del ordenador
+    python -m vclight scene plasma 60   lanza una escena en color perceptual
+    python -m vclight show              espectaculo de 6 escenas encadenadas
     python -m vclight color 255 80 0    color fijo
     python -m vclight on / off
 """
@@ -15,6 +17,7 @@ import time
 
 from . import protocol as p
 from .effects import EFFECTS, play
+from .scenes import SCENES, render, show
 from .lamp import Group, Lamp, discover
 
 
@@ -35,7 +38,11 @@ async def _group(timeout):
 
 async def cmd_scan(args):
     for f in await discover(args.timeout):
-        print(f"{f.rssi:>5} dBm  {f.address}  {f.distancia()}")
+        print(f"{f.rssi:>5} dBm  {f.address}")
+        print(f"             {f.describe()}   {f.distancia()}")
+        if not f.is_magic:
+            print("             aviso: sin LEDs direccionables, los efectos "
+                  "no se desplazan por la tira")
 
 
 async def cmd_find(args):
@@ -96,6 +103,35 @@ async def cmd_fx(args):
         print("fin")
 
 
+async def cmd_scene(args):
+    """Escenas del motor perceptual, en OKLab y con gamma corregida."""
+    if args.name not in SCENES:
+        print("Escenas disponibles:\n")
+        for k, fn in SCENES.items():
+            print(f"  {k:<10} {fn.desc}")
+        return
+    async with await _group(args.timeout) as g:
+        await g.on()
+        print(f"escena '{args.name}' durante {args.seconds:.0f}s")
+        try:
+            await render(g, SCENES[args.name], args.seconds)
+        finally:
+            await g.rgb(255, 180, 110)
+            await g.brightness(255)
+
+
+async def cmd_show(args):
+    """Espectaculo completo: seis escenas con fundidos entre ellas."""
+    async with await _group(args.timeout) as g:
+        await g.on()
+        print()
+        try:
+            await show(g, escala=args.scale)
+        finally:
+            await g.rgb(255, 180, 110)
+            await g.brightness(255)
+
+
 async def cmd_color(args):
     async with await _group(args.timeout) as g:
         await g.on()
@@ -137,6 +173,16 @@ def main(argv=None):
     x.add_argument("name", nargs="?", default="")
     x.add_argument("seconds", nargs="?", type=float, default=20)
     x.set_defaults(fn=cmd_fx)
+
+    s_ = sub.add_parser("scene", help="escena del motor de color perceptual")
+    s_.add_argument("name", nargs="?", default="")
+    s_.add_argument("seconds", nargs="?", type=float, default=60)
+    s_.set_defaults(fn=cmd_scene)
+
+    sh = sub.add_parser("show", help="espectaculo de 6 escenas encadenadas")
+    sh.add_argument("--scale", type=float, default=1.0,
+                    help="multiplica la duracion; 0.25 da una version corta")
+    sh.set_defaults(fn=cmd_show)
 
     c = sub.add_parser("color", help="color fijo")
     c.add_argument("r", type=int); c.add_argument("g", type=int); c.add_argument("b", type=int)

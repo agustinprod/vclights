@@ -18,6 +18,39 @@ la caracteristica AE01, que es "write without response": la lampara no
 confirma nada, asi que un comando mal formado se pierde en silencio.
 """
 
+# ------------------------------------------------- familias de aparato ----
+# La lampara se identifica en el propio anuncio BLE, sin necesidad de
+# conectar. Bajo el identificador de fabricante 22872 manda dos bytes:
+# el primero es el grupo y el segundo el tipo fisico.
+#
+# Esto importa porque de ahi sale si la tira es direccionable o no. La
+# app lo decide con StripDevice.isMagic(), que es cierto solo para los
+# grupos 16, 20 y 21. En una lampara que no sea magic, los modos del
+# firmware existen igual pero no se desplazan: no hay LEDs que recorrer.
+
+APP_ID = 22872   # identificador de fabricante de DoHome en el anuncio
+
+GRUPOS = {
+    1:  "LIGHT_DIM",         2:  "LIGHT_CCT",          3:  "LIGHT_RGB",
+    4:  "LIGHT_RGBW",        5:  "LIGHT_RGBC",         6:  "LIGHT_RGBCW",
+    16: "LIGHT_MAGIC",       17: "LIGHT_MAGIC_W_2PATH", 18: "LIGHT_MAGIC_C_2PATH",
+    19: "LIGHT_START",       20: "LIGHT_MAGIC_W",      21: "LIGHT_MAGIC_CW",
+}
+
+TIPOS = {1: "bombilla", 2: "tira", 3: "plafon", 4: "foco", 5: "spot"}
+
+GRUPOS_MAGIC = {16, 20, 21}   # StripDevice.isMagic()
+
+
+def es_magic(grupo):
+    """Dice si el aparato lleva LEDs direccionables.
+
+    Solo los magic pueden mover un efecto a lo largo de la tira. En los
+    demas, cualquier animacion se ve al unisono en toda la lampara.
+    """
+    return grupo in GRUPOS_MAGIC
+
+
 # ---------------------------------------------------------------- UUID ----
 
 def uuid16(short):

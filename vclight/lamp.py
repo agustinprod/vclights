@@ -24,13 +24,28 @@ from . import protocol as p
 
 @dataclass
 class Found:
-    """Una lampara vista en el escaneo."""
+    """Una lampara vista en el escaneo.
+
+    El grupo y el tipo salen del propio anuncio, sin conectar: la lampara
+    los publica en los dos bytes de datos de fabricante.
+    """
     device: object   # BLEDevice de bleak
     rssi: int        # intensidad de senal en dBm; menos negativo es mas cerca
+    group: int = 0   # familia de aparato, ver protocol.GRUPOS
+    type: int = 0    # forma fisica, ver protocol.TIPOS
 
     @property
     def address(self):
         return self.device.address
+
+    @property
+    def is_magic(self):
+        """True si lleva LEDs direccionables y los efectos se desplazan."""
+        return p.es_magic(self.group)
+
+    def describe(self):
+        return (f"{p.GRUPOS.get(self.group, '?')} / {p.TIPOS.get(self.type, '?')}"
+                f"  {'direccionable' if self.is_magic else 'color unico'}")
 
     def distancia(self):
         """Traduce el RSSI a una distancia aproximada, para buscarla a mano.
@@ -54,8 +69,11 @@ async def discover(timeout=12.0):
     encontradas = {}
 
     def visto(device, adv):
-        if (adv.local_name or device.name or "").upper() == p.DEVICE_NAME:
-            encontradas[device.address] = Found(device, adv.rssi)
+        if (adv.local_name or device.name or "").upper() != p.DEVICE_NAME:
+            return
+        datos = adv.manufacturer_data.get(p.APP_ID, b"")
+        grupo, tipo = (datos[0], datos[1]) if len(datos) >= 2 else (0, 0)
+        encontradas[device.address] = Found(device, adv.rssi, grupo, tipo)
 
     scanner = BleakScanner(detection_callback=visto)
     await scanner.start()

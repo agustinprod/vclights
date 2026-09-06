@@ -82,15 +82,38 @@ y `FF` suelen ser reset de fabrica.
 tres ultimos. En modelos con canal blanco esos bytes son el blanco
 calido, el frio y un auxiliar.
 
-### La tira es direccionable
+### Que aparato es cada lampara
 
-La existencia de `IcLength` e `IcOrder` lo demuestra: son parametros de
-chips tipo WS2812, donde cada LED tiene su propia direccion. Por eso los
-modos del firmware se **desplazan** a lo largo de la tira.
+La lampara publica su familia en el anuncio BLE, bajo el identificador
+de fabricante **22872**, en dos bytes: grupo y tipo.
 
-Ahora bien, **no hay ningun comando de pixel individual**. El movimiento
-solo se consigue con los modos internos; desde fuera solo se puede
-mandar un color global. Esa es la frontera del aparato.
+| Grupo | | Grupo | |
+|---|---|---|---|
+| 1 | LIGHT_DIM | 6 | LIGHT_RGBCW |
+| 2 | LIGHT_CCT | 16 | **LIGHT_MAGIC** |
+| 3 | LIGHT_RGB | 17-18 | MAGIC de 2 vias |
+| 4 | LIGHT_RGBW | 20 | **LIGHT_MAGIC_W** |
+| 5 | LIGHT_RGBC | 21 | **LIGHT_MAGIC_CW** |
+
+Tipo: 1 bombilla, 2 tira, 3 plafon, 4 foco, 5 spot.
+
+`StripDevice.isMagic()` es cierto solo para los grupos 16, 20 y 21. Esos
+son los que llevan LEDs direccionables, y por tanto los unicos donde un
+efecto se **desplaza** a lo largo de la tira.
+
+Cuidado con la deduccion facil: que la app tenga `IcLength` e `IcOrder`
+no prueba que una lampara concreta sea direccionable. La misma app sirve
+a toda la gama de DoHome, que tambien incluye modelos con motor y con
+laser. El byte del anuncio es la unica fuente fiable.
+
+**No hay ningun comando de pixel individual.** Ni siquiera en las magic:
+el movimiento solo se consigue con los modos internos. Desde fuera solo
+se puede mandar un color global, asi que cualquier animacion calculada
+en el ordenador se ve al unisono en toda la tira. Esa es la frontera del
+aparato.
+
+Ademas, un comando de color cancela el modo que estuviera corriendo. Si
+quieres ver un efecto desplazarse, lanza el modo y no mandes nada mas.
 
 ## Modos dinamicos (opcode 07)
 
