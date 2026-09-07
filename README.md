@@ -188,8 +188,21 @@ step out in one labelled contact sheet. That is how these were settled:
 - A single-colour palette is ignored; repeat the index instead.
 - Mode 5 does travel along the tube.
 
-The camera tools need `pip install -r requirements-tools.txt` and camera
-permission for the terminal.
+The camera tools live in `tools/` and need
+`pip install -r requirements-tools.txt`, ffmpeg on PATH, and camera
+permission for the terminal:
+
+| Tool | What it answers |
+|---|---|
+| `camera_probe.py` | what any list of commands actually does |
+| `verify_colors.py primaries` | is the colour order right on each lamp |
+| `verify_colors.py palette` | is each palette index the colour claimed |
+| `photograph_scenes.py` | how the scenes really look on the wall |
+| `fix_color_order.py` | walks all six orders to find the right one |
+| `opcode_sweep.py` | explores opcodes the APK does not explain |
+
+They want a dark room. With the room lights on the tubes wash out in the
+camera and nothing can be judged.
 
 ## Status
 

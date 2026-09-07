@@ -11,3 +11,4 @@ apk/
 *.xapk
 src/
 captures/
+__pycache__/
