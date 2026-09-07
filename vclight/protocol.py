@@ -279,8 +279,15 @@ def cmd_ic_length(leds):
     It also truncates. Declaring fewer LEDs than the strip has lights
     that many from the base and leaves the rest dark, with a crisp edge,
     which is the only way to light a fraction of the tube from outside.
-    Measured on a 72 LED tube: 8 lit 22 percent of it, 24 lit 31, 40 lit
-    53, 64 lit 88, and 72 filled it. See `Lamp.bar`.
+    Measured on a 72 LED tube: 24 lit 35 percent of it, 32 lit 46, 48 lit
+    66, 64 lit 89, and 80 filled it. See `Lamp.bar`.
+
+    Below 16 the firmware ignores the value and drives 16 LEDs, so that
+    stub, about 22 percent, is the smallest bar the hardware can draw.
+    The app's own minimum of 16 is not a coincidence: it declines to send
+    what the firmware would ignore. Nothing clamps or rounds the value on
+    the way out here, so a smaller number reaches the lamp and the lamp
+    is what rejects it.
     """
     return bytes([OP_IC_LENGTH, leds & 0xFF, (leds >> 8) & 0xFF])
 

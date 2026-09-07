@@ -93,13 +93,19 @@ python -m vclight bar 40 -r 0 -g 0 -b 255   # in blue
 ```
 
 Measured on these tubes it is linear and full at 72 LEDs, which is how
-many they have. It cannot read below about 20%: very small values still
-light a short stub, so use `off` for nothing. Pass `--leds` for a strip
-of a different length, and note that the declared length stays in the
-lamp until you set it back.
+many they have. Pass `--leds` for a strip of a different length, and note
+that the declared length stays in the lamp until you set it back.
 
-The full table, and the level meter that looks like it should do this
-and does not, are in [`docs/protocol.md`](docs/protocol.md).
+**It cannot go below 22%.** The firmware ignores a declared length under
+16 LEDs and drives 16 anyway — 12, 13, 14, 15 and 16 are the same
+photograph — so the bar has one LED of resolution above 22% and exactly
+two states below it, that stub and off. The app hides this by refusing
+values under 16 in its settings field; this library sends them, and the
+lamp is what says no.
+
+The full table, why one LED can never be lit, and the level meter that
+looks like it should do this and does not, are in
+[`docs/protocol.md`](docs/protocol.md).
 
 To watch an effect travel the strip, start a firmware mode and **leave
 it alone**:

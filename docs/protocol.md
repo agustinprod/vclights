@@ -157,22 +157,66 @@ Measured on one of these tubes, photographed at each value:
 
 | declared | tube lit |
 |---|---|
-| 8  | 22% |
-| 16 | 26% |
-| 24 | 31% |
-| 32 | 42% |
-| 40 | 53% |
-| 48 | 65% |
-| 56 | 75% |
-| 64 | 88% |
-| 72 | 100% |
-| 80, 96, 128 | 100% |
+| 12, 13, 14, 15, 16 | 27% — all identical |
+| 17 | 29% |
+| 18 | 29% |
+| 19 | 30% |
+| 20 | 31% |
+| 22 | 33% |
+| 24 | 35% |
+| 32 | 46% |
+| 48 | 66% |
+| 64 | 89% |
+| 80, 96, 112, 128, 160, 200 | 100% — all identical |
 
-Linear over the useful range, `lit ≈ 0.0122 × n`, and it stops growing
-at 72, which is therefore the LED count. Two caveats:
+Two flat ends and a straight line between them. Above the floor the fit
+is `lit ≈ n / 72`, one LED per 1.4% of the tube, and it stops growing at
+80, so the tube holds 72 LEDs.
 
-- **It has a floor.** Very small values still light a short stub rather
-  than going dark, so 0% and 10% look alike. Use power off for nothing.
+### The floor is 16, and it is in the firmware
+
+Values below 16 do not draw a shorter bar and do not go dark. They draw
+**exactly** the bar that 16 draws. Twelve, thirteen, fourteen, fifteen
+and sixteen are one photograph repeated five times.
+
+The app never lets a user discover this, because its settings screen
+rejects the values first:
+
+```java
+if (i < 16 || i > 2048) {
+    showToast(R.string.invalid_data);
+} else {
+    SpUtils.setMagicIcCount(i);
+    StripManager.getInstance().IcLength(i);
+}
+```
+
+`strip/page/ic/MagicOrderSettingActivity.java`. That check is the only
+constraint in the whole APK. `StripManager.IcLength(int)` encodes any
+16-bit value verbatim, with no clamp, no rounding to a step and no
+scaling, so sending 12 as a raw packet is something the app cannot do
+and this library can. The lamp answers 16.
+
+So the app's `16` is not the app's own rule. It is the app declining to
+send values its firmware would ignore, and the floor belongs to the
+firmware. Nothing in the tree explains the number: no comment, no
+constant, no string resource, and no LEDs-per-IC grouping that would
+account for it.
+
+The consequence for a progress bar is simple and worth stating plainly:
+
+**The smallest segment this hardware can light is 16 LEDs, which is 22%
+of the tube. There is no way to light one LED.** Above 22% the
+resolution is a single LED. Below it there are exactly two states, 22%
+and off.
+
+### Other caveats
+
+- LEDs past the declared length are **not switched off.** They stop
+  receiving data and hold their last value, so shortening the bar leaves
+  the old fill lit above the new one. Paint the whole strip black at full
+  length first, then truncate. A bar that only grows hides this bug
+  completely; one that goes down is nonsense without the clear.
 - `IcLength` is a configuration command that the app keeps behind a
   settings screen. Whether the lamp commits it to flash is not known, so
   stepping a bar every few seconds is reasonable and driving it at
@@ -325,7 +369,7 @@ pictures is less clever and works.
 walks all six colour orders, shows pure red after each, and the right
 value is the panel where the lamp actually looks red.
 
-### Three ways this rig lies, all of them found the hard way
+### Four ways this rig lies, all of them found the hard way
 
 The `IcLength` truncation above was measured, dismissed as impossible,
 and then measured again. Every wrong answer in between came from the
@@ -348,8 +392,24 @@ measurement, not the lamp. If you extend these tools, know these:
    the fill that grows from the base is clipped, and the readings get a
    floor that is not real.
 
+4. **Aligning frames to commands is the subtlest one.** Recording
+   continuously fixes problem 1 but creates this: every panel now depends
+   on mapping a wall-clock time to a frame index, across an unknown
+   camera-open latency. Two anchors were tried and both failed silently.
+   A brightness threshold locked onto the camera's own exposure ramp and
+   anchored about seventy frames early, shifting every label three or
+   four steps; relabelled that way, the bottom of the `IcLength` range
+   looked quantized in a way the hardware is not. Anchoring on the
+   largest jump instead found the full-white flash at the *end* of the
+   run. What works is to constrain the search to a narrow window derived
+   from the command's own known time, and to confirm two independent runs
+   agree on the anchor frame.
+
 The rule that survived: any number from this rig is a hypothesis until
-the picture it came from has been looked at.
+the picture it came from has been looked at. Note that problem 4 defeats
+even that rule on its own — the pictures were real, they were simply
+under the wrong labels. Two runs whose panels disagree mean the
+alignment is wrong, not the lamp.
 
 ## Unresolved: intermediate colour values
 

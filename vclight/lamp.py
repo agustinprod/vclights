@@ -106,6 +106,10 @@ class Lamp:
         self.device = device
         self.color_order = color_order
         self.gain = gain
+        # Last length bar() declared, so it knows whether the next bar
+        # grows, in which case the clear and its flash are unnecessary.
+        # None means unknown, so the first bar always clears.
+        self._bar_n = None
         self._client = BleakClient(device, timeout=timeout)
 
     async def __aenter__(self):
@@ -163,34 +167,66 @@ class Lamp:
     # growing at 72. Pass leds= for a different strip.
     LEDS = 72
 
-    # Below roughly this fraction the firmware still lights a short stub,
-    # so a bar cannot read lower than about a fifth of the tube.
-    FLOOR = 0.2
+    # The firmware ignores a declared length below this and drives
+    # exactly this many LEDs instead. Measured: 12, 13, 14, 15 and 16 are
+    # the same photograph. The app's settings screen refuses anything
+    # under 16 before it reaches the wire, which is how the number is
+    # confirmed from two directions. See docs/protocol.md.
+    MIN_LEDS = 16
 
-    async def bar(self, fraction, rgb=(255, 255, 255), leds=None):
+    async def bar(self, fraction, rgb=(255, 255, 255), leds=None, clear=False):
         """Light a fraction of the tube, as a progress bar.
 
         There is no per pixel command on these lamps, but `IcLength`
         truncates: tell the lamp the strip is shorter than it is and it
-        lights that many LEDs from the base and leaves the rest dark,
-        with a crisp edge. So the bar is drawn by lying about the length.
+        drives that many LEDs from the base. So the bar is drawn by lying
+        about the length.
 
-        Two things to know before using it in a loop:
+        The smallest bar this hardware can draw is `MIN_LEDS`, which is
+        about 22 percent of the tube. It is a firmware floor, not optics
+        and not a rounding error: below it the lamp draws the 16 LED bar
+        unchanged. So the bar has two states below 22 percent, that stub
+        and off, and one LED of resolution above it. Anything under half
+        of `MIN_LEDS` turns the strip off rather than showing a stub that
+        would misreport the progress by 20 points.
 
-        - It cannot read below about `FLOOR`. Declaring very few LEDs
-          still lights a short stub rather than going dark, so 0 and 0.1
-          look the same. Turn the lamp off for "nothing".
-        - `IcLength` is a configuration command that the app keeps behind
-          a settings screen, and whether the lamp commits it to flash is
-          not known. Stepping a bar every few seconds is fine; driving it
-          at animation rates is not a good idea.
+        The clear is the part that is easy to get wrong. LEDs past the
+        declared length are not switched off, they stop receiving data
+        and hold their last value, so shortening the bar leaves the old
+        fill lit above the new one. Painting the whole strip black at
+        full length first latches every LED off, and only then does the
+        truncated fill show on its own. Without this, a bar that only
+        ever grows looks perfect and one that goes down is nonsense.
 
-        The value is left on the lamp, so set it back with
+        The clear costs a visible flash, so it is skipped when the bar
+        only grows, which is the common case for progress. Pass
+        `clear=True` to force it if something else has touched the lamp.
+
+        `IcLength` is a configuration command the app keeps behind a
+        settings screen, and whether the lamp commits it to flash is not
+        known. Stepping a bar every few seconds is fine; driving it at
+        animation rates is not a good idea.
+
+        The declared length is left on the lamp, so set it back with
         `ic_length(256)` when you are done using it as a bar.
         """
-        n = round(min(1.0, max(0.0, float(fraction))) * (leds or self.LEDS))
-        await self.send(p.cmd_ic_length(max(1, n)))
-        await asyncio.sleep(0.4)          # the length lands before the colour
+        total = leds or self.LEDS
+        n = round(min(1.0, max(0.0, float(fraction))) * total)
+        if n < self.MIN_LEDS // 2:
+            n = 0
+        elif n < self.MIN_LEDS:
+            n = self.MIN_LEDS      # the lamp would do this anyway
+        if clear or n == 0 or self._bar_n is None or n < self._bar_n:
+            await self.send(p.cmd_ic_length(256))
+            await asyncio.sleep(0.45)
+            await self.brightness(255)
+            await self.send(p.cmd_color(0, 0, 0))  # latch every LED off
+            await asyncio.sleep(0.7)
+        self._bar_n = n
+        if n == 0:
+            return
+        await self.send(p.cmd_ic_length(n))
+        await asyncio.sleep(0.45)
         await self.brightness(255)
         await self.rgb(*rgb)
 
@@ -274,6 +310,6 @@ class Group:
     async def mode(self, mode_id, **kw):
         await self.send(p.cmd_mode(mode_id, **kw))
 
-    async def bar(self, fraction, rgb=(255, 255, 255), leds=None):
+    async def bar(self, fraction, rgb=(255, 255, 255), leds=None, clear=False):
         for lamp in self.lamps:
-            await lamp.bar(fraction, rgb, leds)
+            await lamp.bar(fraction, rgb, leds, clear)

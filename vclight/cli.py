@@ -202,11 +202,21 @@ async def cmd_bar(args):
         await g.on()
         await g.bar(f, (args.r, args.g, args.b), args.leds)
         await asyncio.sleep(1.0)
+    # Report what the lamp will do, not what was asked. Below 16 LEDs the
+    # firmware ignores the length and substitutes its own minimum, so a
+    # line echoing the requested percentage would be a lie.
     n = round(f * args.leds)
-    print(f"{args.percent:.0f}% -> ic_length {n} of {args.leds}")
-    if f < Lamp.FLOOR:
-        print(f"note: below {Lamp.FLOOR:.0%} the lamp still lights a stub; "
-              "use 'off' for nothing")
+    floor = Lamp.MIN_LEDS / args.leds
+    if 0 < n < Lamp.MIN_LEDS:
+        drawn = 0 if n < Lamp.MIN_LEDS // 2 else Lamp.MIN_LEDS
+        print(f"{args.percent:.0f}% -> "
+              f"{'off' if not drawn else f'ic_length {drawn}'} of {args.leds}")
+        print(f"note: {args.percent:.0f}% is below this lamp's floor of "
+              f"{floor:.0%}. The firmware ignores any length under "
+              f"{Lamp.MIN_LEDS} and draws {Lamp.MIN_LEDS} LEDs instead, so "
+              f"the bar is {'off' if not drawn else format(floor, '.0%')}.")
+    else:
+        print(f"{args.percent:.0f}% -> ic_length {n} of {args.leds}")
 
 
 async def cmd_ramp(args):
