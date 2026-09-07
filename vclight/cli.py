@@ -19,7 +19,7 @@ import time
 
 from . import protocol as p
 from .effects import EFFECTS, play
-from .lamp import Group, discover
+from .lamp import Group, Lamp, discover
 from .scenes import SCENES, render, show
 
 
@@ -195,6 +195,31 @@ async def cmd_color(args):
         await asyncio.sleep(1.0)      # let the write leave before closing
 
 
+async def cmd_bar(args):
+    """Light a percentage of the tube, as a progress bar."""
+    f = min(1.0, max(0.0, args.percent / 100.0))
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
+        await g.on()
+        await g.bar(f, (args.r, args.g, args.b), args.leds)
+        await asyncio.sleep(1.0)
+    n = round(f * args.leds)
+    print(f"{args.percent:.0f}% -> ic_length {n} of {args.leds}")
+    if f < Lamp.FLOOR:
+        print(f"note: below {Lamp.FLOOR:.0%} the lamp still lights a stub; "
+              "use 'off' for nothing")
+
+
+async def cmd_ramp(args):
+    """Walk the bar from 0 to 100 percent, to see it grow."""
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
+        await g.on()
+        for pct in range(0, 101, args.step):
+            await g.bar(pct / 100.0, (args.r, args.g, args.b), args.leds)
+            print(f"  {pct:>3}%", flush=True)
+            await asyncio.sleep(args.hold)
+        await asyncio.sleep(1.0)
+
+
 async def cmd_power(args):
     async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         await (g.on() if args.on else g.off())
@@ -255,6 +280,24 @@ def main(argv=None):
     o.add_argument("--hold", type=float, default=4.0,
                    help="seconds to hold each order during a sweep")
     o.set_defaults(fn=cmd_order)
+
+    b_ = sub.add_parser("bar", help="light a percentage of the tube")
+    b_.add_argument("percent", type=float)
+    b_.add_argument("--leds", type=int, default=Lamp.LEDS,
+                    help="LEDs on the strip; the bar is a fraction of this")
+    b_.add_argument("-r", type=int, default=255)
+    b_.add_argument("-g", type=int, default=255)
+    b_.add_argument("-b", type=int, default=255)
+    b_.set_defaults(fn=cmd_bar)
+
+    rm = sub.add_parser("ramp", help="walk the bar from 0 to 100 percent")
+    rm.add_argument("--step", type=int, default=10)
+    rm.add_argument("--hold", type=float, default=1.2)
+    rm.add_argument("--leds", type=int, default=Lamp.LEDS)
+    rm.add_argument("-r", type=int, default=255)
+    rm.add_argument("-g", type=int, default=255)
+    rm.add_argument("-b", type=int, default=255)
+    rm.set_defaults(fn=cmd_ramp)
 
     c = sub.add_parser("color", help="static colour")
     c.add_argument("r", type=int); c.add_argument("g", type=int); c.add_argument("b", type=int)

@@ -46,6 +46,8 @@ python -m vclight scene plasma 120    # perceptual-colour scene
 python -m vclight show                # six scenes with cross-fades
 python -m vclight fx fire 60          # frame-by-frame fire
 python -m vclight color 255 80 0      # static orange
+python -m vclight bar 70              # light 70% of the tube
+python -m vclight ramp                # walk the bar 0 to 100%
 python -m vclight find                # live proximity meter
 ```
 
@@ -78,6 +80,26 @@ a lamp. There is no command to address an individual LED, so anything
 computed here paints the whole strip one colour and shows at once across
 it. What the computed animations offer instead is fine control of colour
 and timing, and they can move an effect **between** several lamps.
+
+## A progress bar
+
+You cannot address a pixel, but you can light part of the tube. Telling
+the lamp the strip is shorter than it is lights that many LEDs from the
+base and leaves the rest dark, and it holds:
+
+```bash
+python -m vclight bar 70          # 70% of the tube, from the base up
+python -m vclight bar 40 -r 0 -g 0 -b 255   # in blue
+```
+
+Measured on these tubes it is linear and full at 72 LEDs, which is how
+many they have. It cannot read below about 20%: very small values still
+light a short stub, so use `off` for nothing. Pass `--leds` for a strip
+of a different length, and note that the declared length stays in the
+lamp until you set it back.
+
+The full table, and the level meter that looks like it should do this
+and does not, are in [`docs/protocol.md`](docs/protocol.md).
 
 To watch an effect travel the strip, start a firmware mode and **leave
 it alone**:
@@ -216,8 +238,13 @@ The internal palette is decoded and confirmed on the hardware: 0 red,
 `python -m vclight colors` lists it along with the 19 combinations the
 app itself offers.
 
-Still open: the firmware's exact RGB values for those eight entries, and
-the parameters of opcode `10`.
+Opcode `10` is decoded: it is the level meter the app feeds from the
+phone's microphone, `10 r g b 00 00 <level> <effect>`. It reads as a
+gate on a beat rather than a proportional fill, so it is not the way to
+draw a bar; `IcLength` is.
+
+Still open: the firmware's exact RGB values for those eight palette
+entries.
 
 ## Prior work
 

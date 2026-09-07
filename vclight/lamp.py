@@ -158,6 +158,42 @@ class Lamp:
         r, g, b = colorsys.hsv_to_rgb(h % 1.0, s, v)
         await self.rgb(r * 255, g * 255, b * 255)
 
+    # LEDs on the tubes this was built against, found by declaring
+    # lengths and photographing: the fill grew linearly and stopped
+    # growing at 72. Pass leds= for a different strip.
+    LEDS = 72
+
+    # Below roughly this fraction the firmware still lights a short stub,
+    # so a bar cannot read lower than about a fifth of the tube.
+    FLOOR = 0.2
+
+    async def bar(self, fraction, rgb=(255, 255, 255), leds=None):
+        """Light a fraction of the tube, as a progress bar.
+
+        There is no per pixel command on these lamps, but `IcLength`
+        truncates: tell the lamp the strip is shorter than it is and it
+        lights that many LEDs from the base and leaves the rest dark,
+        with a crisp edge. So the bar is drawn by lying about the length.
+
+        Two things to know before using it in a loop:
+
+        - It cannot read below about `FLOOR`. Declaring very few LEDs
+          still lights a short stub rather than going dark, so 0 and 0.1
+          look the same. Turn the lamp off for "nothing".
+        - `IcLength` is a configuration command that the app keeps behind
+          a settings screen, and whether the lamp commits it to flash is
+          not known. Stepping a bar every few seconds is fine; driving it
+          at animation rates is not a good idea.
+
+        The value is left on the lamp, so set it back with
+        `ic_length(256)` when you are done using it as a bar.
+        """
+        n = round(min(1.0, max(0.0, float(fraction))) * (leds or self.LEDS))
+        await self.send(p.cmd_ic_length(max(1, n)))
+        await asyncio.sleep(0.4)          # the length lands before the colour
+        await self.brightness(255)
+        await self.rgb(*rgb)
+
     async def mode(self, mode_id, speed=50, brightness=100,
                    colors=(0, 1), direction=0, section=0):
         """Start one of the 18 firmware effects.
@@ -237,3 +273,7 @@ class Group:
 
     async def mode(self, mode_id, **kw):
         await self.send(p.cmd_mode(mode_id, **kw))
+
+    async def bar(self, fraction, rgb=(255, 255, 255), leds=None):
+        for lamp in self.lamps:
+            await lamp.bar(fraction, rgb, leds)

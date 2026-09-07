@@ -140,7 +140,63 @@ is the only reliable source.
 **There is no individual pixel command.** Not even on magic devices:
 movement comes only from the internal modes. From outside you can send a
 global colour and nothing else, so any animation computed on a computer
-shows at once across the whole strip. That is the boundary of the device.
+shows at once across the whole strip.
+
+That is not quite the boundary of the device, though. You cannot address
+a pixel, but you can light a **fraction** of the tube: see the next
+section.
+
+## A progress bar, through IcLength
+
+`IcLength` (opcode `0F`) truncates. Declare fewer LEDs than the strip
+has and the lamp lights that many from the base, leaving the rest dark
+with a crisp edge, and it holds. Nothing else on this device lights part
+of the tube on command.
+
+Measured on one of these tubes, photographed at each value:
+
+| declared | tube lit |
+|---|---|
+| 8  | 22% |
+| 16 | 26% |
+| 24 | 31% |
+| 32 | 42% |
+| 40 | 53% |
+| 48 | 65% |
+| 56 | 75% |
+| 64 | 88% |
+| 72 | 100% |
+| 80, 96, 128 | 100% |
+
+Linear over the useful range, `lit ≈ 0.0122 × n`, and it stops growing
+at 72, which is therefore the LED count. Two caveats:
+
+- **It has a floor.** Very small values still light a short stub rather
+  than going dark, so 0% and 10% look alike. Use power off for nothing.
+- `IcLength` is a configuration command that the app keeps behind a
+  settings screen. Whether the lamp commits it to flash is not known, so
+  stepping a bar every few seconds is reasonable and driving it at
+  animation rates is not.
+
+`Lamp.bar()` and `vclight bar 70` wrap this. The declared length stays on
+the lamp, so set it back with `ic_length(256)` afterwards.
+
+## The level meter (opcode 10)
+
+    10  <r> <g> <b>  00 00  <level 0-255>  <effect 0-3>
+
+`recorderUpdate(r, g, b, level, effect)` in the app, which streams it
+about twenty times a second from the phone's microphone and shows the
+same number as a percentage in its own UI. That is what identifies byte
+seven as an amplitude. Level 0 is how the app stops it. Send `11 04`
+(`openPhoneMic`) once first to put the lamp into streaming mode.
+
+The four effects for addressable strips, from `MagicEffectView`: 0
+classic, 1 soft, 2 dynamic, 3 disco.
+
+It is **not** a fill, which is the obvious thing to hope for. A held 64
+left the tube dark and a held 160 or 255 lit all of it: it behaves as a
+gate on a beat, not as a bar.
 
 ## Dynamic modes (opcode 07)
 
@@ -268,6 +324,32 @@ pictures is less clever and works.
 `tools/fix_color_order.py` applies the same idea to one question: it
 walks all six colour orders, shows pure red after each, and the right
 value is the panel where the lamp actually looks red.
+
+### Three ways this rig lies, all of them found the hard way
+
+The `IcLength` truncation above was measured, dismissed as impossible,
+and then measured again. Every wrong answer in between came from the
+measurement, not the lamp. If you extend these tools, know these:
+
+1. **One still per condition is not a measurement.** Opening the camera
+   cold returns a black frame, and its auto exposure then ramps for
+   about two seconds. In a dark room, sampling that is indistinguishable
+   from a lamp blinking, and it invented both a blink that did not exist
+   and a beautifully monotone ramp that did not reproduce. Record
+   continuous video, open the camera once, and drop the first seconds.
+
+2. **Locating the tube by diffing dark against lit finds the wall.** In
+   a corridor the brightest thing that changed is the surface the lamp
+   illuminates, not the lamp. That crop reported every condition as
+   identically "fully lit", because the wall was. Crop to the tube and
+   *look at the crop* before trusting a number computed from it.
+
+3. **Check the tube is entirely in frame.** With its base out of shot,
+   the fill that grows from the base is clipped, and the readings get a
+   floor that is not real.
+
+The rule that survived: any number from this rig is a hypothesis until
+the picture it came from has been looked at.
 
 ## Unresolved: intermediate colour values
 

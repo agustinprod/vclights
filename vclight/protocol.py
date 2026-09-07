@@ -273,10 +273,48 @@ def cmd_mode(mode_id, speed=50, brightness=100, colors=(0, 1), direction=0, sect
 def cmd_ic_length(leds):
     """Declare how many LEDs the strip has. Little endian.
 
-    Only needed when the lamp ships misconfigured and effects stop
-    halfway along the strip.
+    The app exposes it as a settings field accepting 16 to 2048, to fix a
+    lamp that ships with the wrong count.
+
+    It also truncates. Declaring fewer LEDs than the strip has lights
+    that many from the base and leaves the rest dark, with a crisp edge,
+    which is the only way to light a fraction of the tube from outside.
+    Measured on a 72 LED tube: 8 lit 22 percent of it, 24 lit 31, 40 lit
+    53, 64 lit 88, and 72 filled it. See `Lamp.bar`.
     """
     return bytes([OP_IC_LENGTH, leds & 0xFF, (leds >> 8) & 0xFF])
+
+
+def cmd_phone_mic():
+    """Put the lamp into streaming mode, so it will accept levels.
+
+    `openPhoneMic()` in the app, sent once before it starts streaming the
+    microphone. The 04 is a literal in the app, not a parameter.
+    """
+    return bytes([OP_PHONE_MIC, 0x04])
+
+
+def cmd_level(r, g, b, level, effect=0):
+    """Push one audio level, which the lamp renders as a beat.
+
+    `recorderUpdate(r, g, b, level, effect)` in the app:
+
+        10 <r> <g> <b> 00 00 <level> <effect>
+
+    The app streams this about twenty times a second from the phone's
+    microphone, and displays the same number as a percentage in its own
+    UI, which is what identifies byte seven as a 0 to 255 amplitude.
+    Level 0 is how the app stops it (`recorderStop`). The effect selects
+    the rendering, from the app's four for addressable strips: 0 classic,
+    1 soft, 2 dynamic, 3 disco.
+
+    Do not mistake the level for a fill. It reads as a gate, not a bar:
+    a held 64 left the tube dark and a held 160 or 255 lit all of it, so
+    it never showed a proportion. For a proportional bar use `Lamp.bar`,
+    which works through IcLength.
+    """
+    return bytes([OP_RECORDER, _byte(r), _byte(g), _byte(b), 0, 0,
+                  _byte(level), _byte(effect)])
 
 
 def cmd_ic_order(order):
