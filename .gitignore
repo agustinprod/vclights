@@ -10,3 +10,4 @@ apk/
 *.apk
 *.xapk
 src/
+captures/

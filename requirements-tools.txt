@@ -1,0 +1,4 @@
+# Only needed by the camera verification tools in tools/.
+# They also need ffmpeg on PATH and camera permission for the terminal.
+numpy>=1.26
+pillow>=10.0

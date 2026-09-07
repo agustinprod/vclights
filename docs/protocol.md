@@ -81,8 +81,37 @@ and with a laser.
 ### Colour takes six bytes, not three
 
 `ColorAdjust(r, g, b, w1, w2, w3)`. The app always sends zeroes in the
-last three. On models with a white channel those bytes are warm white,
-cool white and an auxiliary.
+last three. On models with a white channel those bytes are meant to be
+warm white, cool white and an auxiliary.
+
+Tested one at a time on a magic strip: bytes 4, 5 and 6 light nothing.
+On this hardware they really are padding, and the app is right to zero
+them.
+
+### Set the colour order first, or nothing else makes sense
+
+Before anything about colour can be trusted, the chip's colour order has
+to match the wiring. Opcode `0E`, value 1, is plain RGB.
+
+A strip can be wired with the chip's channels in any order. When the
+firmware assumes the wrong one, every colour comes out permuted: send
+red, get green. Two lamps of the same model can differ. The two used
+here did:
+
+| Sent | Lamp A showed | Lamp B showed |
+|---|---|---|
+| `03 ff 00 00` red | red | green |
+| `03 00 ff 00` green | blue | blue |
+| `03 00 00 ff` blue | green | red |
+| `03 ff ff ff` white | white | white |
+
+White looks right in every order, which is what makes the fault
+confusing: it only shows up on colours. The giveaway is warm white
+coming out magenta or green.
+
+After `0E 01` both lamps map red to red, green to green and blue to
+blue. Verified with a camera; order 2 swaps green and blue, and 3 to 6
+are the other permutations.
 
 ### Which device each lamp is
 
@@ -197,10 +226,19 @@ In three modes bit 6 is not the travel direction:
 | 16 on/off | alternation |
 | 17 curtain | up or down |
 
+### A single-colour palette is ignored
+
+Send a palette of one colour and the firmware discards it, falling back
+to its default red and green. To get one flat colour out of a mode,
+repeat the index: `palette(3, 3)`. That is also the trick that let each
+palette entry be verified on its own.
+
 ### Two traps when starting a mode
 
 1. **A colour command cancels it.** Opcode 03 returns the lamp to static
-   colour. Start the mode and send nothing else.
+   colour. Start the mode and send nothing else. Confirmed with a
+   camera: a mode showing bands along the tube, then one colour
+   command, and the tube goes flat again.
 2. **Do not disconnect straight afterwards.** The write has no response:
    the call returns at once because the system queued it, not because it
    went out. Closing the connection at that moment loses the packet with
@@ -213,9 +251,28 @@ you nothing useful: the system queues it. The real limit is the BLE
 connection interval, 15 to 45 ms, meaning between 20 and 60 commands per
 second. This project animates at 22 frames per second, comfortably under.
 
+## How this was verified
+
+The protocol acknowledges nothing, so every claim about what a command
+does needs somebody looking at the lamp. `tools/camera_probe.py` takes
+the person out of the loop: it sends a command, photographs the lamps
+with the laptop webcam, and lays every step out in one labelled contact
+sheet.
+
+Automatic colour measurement was tried first and abandoned. The webcam
+re-runs exposure and white balance on every shot, so the frame shifts
+between captures and background subtraction lights up the whole room;
+and skin tones sit in the same hue range as a warm lamp. Reading the
+pictures is less clever and works.
+
+`tools/fix_color_order.py` applies the same idea to one question: it
+walks all six colour orders, shows pure red after each, and the right
+value is the panel where the lamp actually looks red.
+
 ## Still unknown
 
-- The firmware's exact RGB values for the eight palette entries. Their
-  identity is settled, but not the precise shade of each.
+- The firmware's exact RGB values for the eight palette entries. Which
+  colour each index is has been confirmed on the hardware; the precise
+  shade has not.
 - The parameters of `recorderUpdate` (opcode `10`).
 - Whether `AE02` ever notifies anything at all.

@@ -4,6 +4,7 @@
     python -m vclight find              live proximity meter
     python -m vclight modes             list the 18 firmware modes
     python -m vclight colors            list the internal palette
+    python -m vclight order 1           fix permuted colours (opcode 0E)
     python -m vclight mode 5 --speed 50 start a firmware mode
     python -m vclight fx fire 60        run a computer-side animation
     python -m vclight scene plasma 60   run a perceptual-colour scene
@@ -22,7 +23,7 @@ from .lamp import Group, discover
 from .scenes import SCENES, render, show
 
 
-async def _group(timeout):
+async def _group(timeout, order=None):
     """Find lamps and wrap them in a group. Fails with a useful message
     when there are none, which is by far the commonest error."""
     found = await discover(timeout)
@@ -34,7 +35,7 @@ async def _group(timeout):
         sys.exit(1)
     print(f"{len(found)} lamp(s): " +
           ", ".join(f"{f.address[:8]} {f.rssi} dBm" for f in found))
-    return Group([f.device for f in found])
+    return Group([f.device for f in found], color_order=order)
 
 
 async def cmd_scan(args):
@@ -85,6 +86,31 @@ async def cmd_modes(args):
     print("A later colour command cancels the mode: start it and send nothing else.")
 
 
+async def cmd_order(args):
+    """Set the chip's colour order, or sweep to find the right one.
+
+    Without this, colours can come out permuted: send red, get green.
+    The value is stored in the lamp, so it only needs doing once.
+    """
+    async with await _group(args.timeout) as g:
+        if args.sweep:
+            print("Sending each order, then pure red. The right one is the")
+            print("value where the lamp actually looks red.\n")
+            for v in range(1, 7):
+                print(f"  order {v}", flush=True)
+                await g.send(p.cmd_ic_order(v))
+                await asyncio.sleep(0.5)
+                await g.rgb(255, 0, 0)
+                await asyncio.sleep(args.hold)
+        else:
+            await g.send(p.cmd_ic_order(args.value))
+            await asyncio.sleep(0.5)
+            await g.on()
+            await g.rgb(255, 0, 0)
+            await asyncio.sleep(1.0)
+            print(f"order {args.value} sent; the lamp should now look red")
+
+
 async def cmd_colors(args):
     print("Internal firmware palette. Use the indices with --colors.\n")
     for i, name in p.PALETTE.items():
@@ -98,7 +124,7 @@ async def cmd_colors(args):
 
 
 async def cmd_mode(args):
-    async with await _group(args.timeout) as g:
+    async with await _group(args.timeout, args.order) as g:
         await g.on()
         await g.mode(args.id, speed=args.speed, brightness=args.brightness,
                      colors=tuple(args.colors), direction=args.direction,
@@ -116,7 +142,7 @@ async def cmd_fx(args):
         for k, fn in EFFECTS.items():
             print(f"  {k:<10} {fn.desc}")
         return
-    async with await _group(args.timeout) as g:
+    async with await _group(args.timeout, args.order) as g:
         print(f"effect '{args.name}' for {args.seconds:.0f}s")
         await play(g, args.name, args.seconds)
         print("done")
@@ -129,7 +155,7 @@ async def cmd_scene(args):
         for k, fn in SCENES.items():
             print(f"  {k:<10} {fn.desc}")
         return
-    async with await _group(args.timeout) as g:
+    async with await _group(args.timeout, args.order) as g:
         await g.on()
         print(f"scene '{args.name}' for {args.seconds:.0f}s")
         try:
@@ -141,7 +167,7 @@ async def cmd_scene(args):
 
 async def cmd_show(args):
     """The full show: six scenes with cross-fades between them."""
-    async with await _group(args.timeout) as g:
+    async with await _group(args.timeout, args.order) as g:
         await g.on()
         print()
         try:
@@ -152,7 +178,7 @@ async def cmd_show(args):
 
 
 async def cmd_color(args):
-    async with await _group(args.timeout) as g:
+    async with await _group(args.timeout, args.order) as g:
         await g.on()
         await g.brightness(args.brightness)
         await g.rgb(args.r, args.g, args.b)
@@ -160,7 +186,7 @@ async def cmd_color(args):
 
 
 async def cmd_power(args):
-    async with await _group(args.timeout) as g:
+    async with await _group(args.timeout, args.order) as g:
         await (g.on() if args.on else g.off())
         await asyncio.sleep(1.0)
 
@@ -170,6 +196,9 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--timeout", type=float, default=12.0,
                     help="seconds to scan before connecting")
+    ap.add_argument("--order", type=int, default=None,
+                    help="send this colour order (opcode 0E) on connecting; "
+                         "1 is plain RGB. Use it when colours come out wrong")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("scan", help="list the lamps in range").set_defaults(fn=cmd_scan)
@@ -205,6 +234,14 @@ def main(argv=None):
     sh.add_argument("--scale", type=float, default=1.0,
                     help="multiplies every duration; 0.25 gives a short version")
     sh.set_defaults(fn=cmd_show)
+
+    o = sub.add_parser("order", help="set or find the chip's colour order")
+    o.add_argument("value", nargs="?", type=int, default=1)
+    o.add_argument("--sweep", action="store_true",
+                   help="try all six orders, showing red after each")
+    o.add_argument("--hold", type=float, default=4.0,
+                   help="seconds to hold each order during a sweep")
+    o.set_defaults(fn=cmd_order)
 
     c = sub.add_parser("color", help="static colour")
     c.add_argument("r", type=int); c.add_argument("g", type=int); c.add_argument("b", type=int)

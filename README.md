@@ -109,6 +109,25 @@ Only groups `LIGHT_MAGIC`, `LIGHT_MAGIC_W` and `LIGHT_MAGIC_CW` carry
 addressable LEDs. On the others the firmware modes still work, but they
 show across the whole lamp at once because there is nothing to travel.
 
+## If the colours come out wrong, fix this first
+
+```bash
+python -m vclight order 1
+```
+
+A strip can be wired with the chip's channels in any order, and when the
+firmware assumes the wrong one every colour is permuted: you send red
+and get green. Two lamps of the same model can differ — the two this was
+built against did, and nothing about colour worked until they were set.
+
+White looks correct in every order, which is what makes it confusing.
+The giveaway is warm white coming out magenta or green. If you do not
+know your value, `python -m vclight order --sweep` shows red under each
+of the six in turn; the right one is where the lamp actually looks red.
+
+The setting sticks in the lamp, so it is a one-off. Every command also
+takes `--order 1` if you would rather send it each time.
+
 ## The lamp confirms nothing
 
 The BLE write is *without response*. A malformed command raises no error:
@@ -143,15 +162,33 @@ around with the laptop: the number rises as you close in. It is not a
 distance measurement — the signal bounces off walls — but it works for a
 game of hot and cold.
 
+## Verified with a camera, not by trust
+
+Because the protocol acknowledges nothing, `tools/camera_probe.py` sends
+a command, photographs the lamps with the laptop webcam, and lays every
+step out in one labelled contact sheet. That is how these were settled:
+
+- Colour order 1 is plain RGB, and both lamps were on the wrong one.
+- Bytes 4, 5 and 6 of the colour command light nothing.
+- A colour command really does cancel a running mode.
+- All eight palette entries are the colours the APK cross-reference said.
+- A single-colour palette is ignored; repeat the index instead.
+- Mode 5 does travel along the tube.
+
+The camera tools need `pip install -r requirements-tools.txt` and camera
+permission for the terminal.
+
 ## Status
 
 Tested on macOS 25.5 with two lamps at once. Firmware modes confirmed
 running on the hardware. The palette encoding reproduces the APK's own
-literals byte for byte, so the protocol is read correctly.
+literals byte for byte, and the palette itself was then confirmed on the
+lamps.
 
-The internal palette is decoded: 0 red, 1 green, 2 blue, 3 yellow,
-4 cyan, 5 violet, 6 orange, 7 white. `python -m vclight colors` lists it
-along with the 19 combinations the app itself offers.
+The internal palette is decoded and confirmed on the hardware: 0 red,
+1 green, 2 blue, 3 yellow, 4 cyan, 5 violet, 6 orange, 7 white.
+`python -m vclight colors` lists it along with the 19 combinations the
+app itself offers.
 
 Still open: the firmware's exact RGB values for those eight entries, and
 the parameters of opcode `10`.

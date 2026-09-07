@@ -84,14 +84,30 @@ async def discover(timeout=12.0):
 
 
 class Lamp:
-    """One connected lamp. Used as an async context manager."""
+    """One connected lamp. Used as an async context manager.
 
-    def __init__(self, device, timeout=25.0):
+    color_order matters more than it looks. These strips can be wired
+    with the chip's channels in any order, and when the firmware's
+    assumption does not match the wiring, every colour comes out
+    permuted: you send red and get green. Two lamps of the same model
+    can differ. Passing color_order sends opcode 0E right after
+    connecting, so colours mean what they say.
+
+    Order 1 is plain RGB and is the right answer for the lamps this was
+    developed against. Use `python -m vclight order --sweep` to find it
+    for yours.
+    """
+
+    def __init__(self, device, timeout=25.0, color_order=None):
         self.device = device
+        self.color_order = color_order
         self._client = BleakClient(device, timeout=timeout)
 
     async def __aenter__(self):
         await self._client.connect()
+        if self.color_order is not None:
+            await self.send(p.cmd_ic_order(self.color_order))
+            await asyncio.sleep(0.3)
         return self
 
     async def __aexit__(self, *exc):
@@ -164,8 +180,8 @@ class Group:
     eye the difference does not show.
     """
 
-    def __init__(self, devices):
-        self.lamps = [Lamp(d) for d in devices]
+    def __init__(self, devices, color_order=None):
+        self.lamps = [Lamp(d, color_order=color_order) for d in devices]
 
     async def __aenter__(self):
         for lamp in self.lamps:

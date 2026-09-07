@@ -165,6 +165,8 @@ def mode_byte(mode_id, direction=0, section=0):
 # "RD OR YE GN CYAN BU VT". That is spectral order. A wrong mapping would
 # not produce a rainbow out of a scrambled permutation.
 
+# Verified against the hardware with a camera, one index at a time,
+# using mode 2 with the index repeated. All eight matched.
 PALETTE = {
     0: "red",
     1: "green",
@@ -207,6 +209,11 @@ def palette_names(indices):
 
 def palette(*indices):
     """Encode a palette of up to 8 colours.
+
+    A palette of ONE colour is ignored: the firmware falls back to its
+    default red and green. Repeat the index to get a single colour,
+    palette(3, 3), which is how each entry below was verified one at a
+    time against the hardware.
 
     The app's format: one byte saying how many colours there are, then
     the indices packed two per byte, a nibble each.
@@ -273,8 +280,22 @@ def cmd_ic_length(leds):
 
 
 def cmd_ic_order(order):
-    """Colour order of the LED chip: RGB, GRB, BRG and so on. If colours
-    come out swapped, red showing as green, this is what to adjust."""
+    """Colour order of the LED chip.
+
+    This is the single most important command on these lamps and the app
+    buries it in a settings screen. A strip can be wired with the chip's
+    channels in any order; when the firmware's assumption does not match
+    the wiring, every colour comes out permuted. Send red, get green.
+    Two lamps of the same model can differ, and the ones this was
+    developed against did: nothing about colour worked until it was set.
+
+    Values run from 1 (the app sends tab position + 1). Order 1 is plain
+    RGB. Verified against the hardware with a camera: order 1 gives red
+    for red, green for green and blue for blue; order 2 swaps green and
+    blue; 3 to 6 are the remaining permutations.
+
+    Symptom to recognise: warm white coming out magenta or green.
+    """
     return bytes([OP_IC_ORDER, _byte(order)])
 
 
