@@ -142,7 +142,34 @@ byte, a nibble each:
     palette(2, 3, 4)  -> 03 23 40 00 00
 
 Both examples appear verbatim in `Mode.java`, which confirms the reading
-is correct. Indices run 0 to 7 over an internal firmware palette.
+is correct. Indices run 0 to 7 over an internal firmware palette:
+
+| | | | |
+|---|---|---|---|
+| 0 red | 1 green | 2 blue | 3 yellow |
+| 4 cyan | 5 violet | 6 orange | 7 white |
+
+That mapping is nowhere stated in the APK. It was cross-referenced out
+of it. Every `Mode` carries both a `colorId`, which indexes the
+`mode_colors` array of names, and a `colorValue`, which encodes the
+palette indices. Line the two up across all 19 entries and each index
+resolves to exactly one name, with no contradiction anywhere:
+
+| colorId | name | colorValue | indices |
+|---|---|---|---|
+| 0 | RD GN | `0201000000` | 0, 1 |
+| 4 | BU YE CYAN | `0323400000` | 2, 3, 4 |
+| 5 | CYAN VT OG | `0345600000` | 4, 5, 6 |
+| 17 | RD OR YE GN CYAN BU VT | `0706314250` | 0, 6, 3, 1, 4, 2, 5 |
+| 18 | RD GN BU YE CYAN VT OR WT | `0801234567` | 0 to 7 |
+
+Entry 17 is the clincher. Its indices are a scrambled permutation, yet
+the names it maps to come out in spectral order — red, orange, yellow,
+green, cyan, blue, violet. A wrong mapping would not turn a shuffled
+permutation into a rainbow.
+
+`protocol.PRESETS` holds all 19 combinations in the app's own order, so
+`PRESETS[colorId]` gives the indices the app would have sent.
 
 ### The catalogue
 
@@ -188,6 +215,7 @@ second. This project animates at 22 frames per second, comfortably under.
 
 ## Still unknown
 
-- What each index of the internal palette (0 to 7) actually is.
+- The firmware's exact RGB values for the eight palette entries. Their
+  identity is settled, but not the precise shade of each.
 - The parameters of `recorderUpdate` (opcode `10`).
 - Whether `AE02` ever notifies anything at all.

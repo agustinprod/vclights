@@ -3,6 +3,7 @@
     python -m vclight scan              find lamps and read their signal
     python -m vclight find              live proximity meter
     python -m vclight modes             list the 18 firmware modes
+    python -m vclight colors            list the internal palette
     python -m vclight mode 5 --speed 50 start a firmware mode
     python -m vclight fx fire 60        run a computer-side animation
     python -m vclight scene plasma 60   run a perceptual-colour scene
@@ -82,6 +83,18 @@ async def cmd_modes(args):
         print(f"  {i:>2}  {name:<12}" + (f"  --direction switches: {extra}" if extra else ""))
     print("\n--direction reverses the travel, --section splits it into runs.")
     print("A later colour command cancels the mode: start it and send nothing else.")
+
+
+async def cmd_colors(args):
+    print("Internal firmware palette. Use the indices with --colors.\n")
+    for i, name in p.PALETTE.items():
+        r, g, b = p.PALETTE_RGB[i]
+        print(f"  {i}  {name:<8} about rgb({r}, {g}, {b})")
+    print("\nThe 19 combinations the app itself offers:\n")
+    for i, combo in enumerate(p.PRESETS):
+        mark = "   <- spectral order" if combo == p.SPECTRUM else ""
+        print(f"  {i:>2}  --colors {' '.join(map(str, combo)):<16} "
+              f"{p.palette_names(combo)}{mark}")
 
 
 async def cmd_mode(args):
@@ -166,6 +179,7 @@ def main(argv=None):
     f.set_defaults(fn=cmd_find)
 
     sub.add_parser("modes", help="list the firmware modes").set_defaults(fn=cmd_modes)
+    sub.add_parser("colors", help="list the internal palette").set_defaults(fn=cmd_colors)
 
     m = sub.add_parser("mode", help="start a firmware mode")
     m.add_argument("id", type=int, choices=sorted(p.MODES))

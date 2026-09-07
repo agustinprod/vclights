@@ -151,6 +151,60 @@ def mode_byte(mode_id, direction=0, section=0):
     return (mode_id & 0x1F) | ((section & 1) << 7) | ((direction & 1) << 6)
 
 
+# --------------------------------------------------------- the palette ---
+# The eight colours of the internal firmware palette, recovered from the
+# APK. They are never listed anywhere directly: they were cross-
+# referenced out of it.
+#
+# Every Mode in Mode.java carries both a colorId, which indexes the
+# mode_colors array of names, and a colorValue, which encodes the palette
+# indices. Line the two up across all 19 entries and each index resolves
+# to exactly one name, with no contradiction anywhere.
+#
+# The clincher is entry 17: indices 0, 6, 3, 1, 4, 2, 5 named
+# "RD OR YE GN CYAN BU VT". That is spectral order. A wrong mapping would
+# not produce a rainbow out of a scrambled permutation.
+
+PALETTE = {
+    0: "red",
+    1: "green",
+    2: "blue",
+    3: "yellow",
+    4: "cyan",
+    5: "violet",
+    6: "orange",
+    7: "white",
+}
+
+# Approximate RGB for each palette entry. These are for previewing and
+# for naming things on screen only: the firmware's actual values are not
+# published anywhere in the APK.
+PALETTE_RGB = {
+    0: (255, 0, 0),     1: (0, 255, 0),     2: (0, 0, 255),    3: (255, 255, 0),
+    4: (0, 255, 255),   5: (160, 0, 255),   6: (255, 120, 0),  7: (255, 255, 255),
+}
+
+# The 19 combinations the app itself offers, in its own order. The index
+# into this list is the colorId used by Mode.java.
+PRESETS = [
+    (0, 1),                      (0, 2),                   (1, 2),
+    (0, 1, 2),                   (2, 3, 4),                (4, 5, 6),
+    (0, 1, 2, 3),                (1, 2, 3, 4),             (2, 3, 4, 5),
+    (0, 1, 2, 3, 4),             (1, 2, 3, 4, 5),          (2, 3, 4, 5, 6),
+    (0, 1, 2, 3, 4, 5),          (1, 2, 3, 4, 5, 6),       (2, 3, 4, 5, 6, 7),
+    (0, 1, 2, 3, 4, 5, 6),       (1, 2, 3, 4, 5, 6, 7),
+    (0, 6, 3, 1, 4, 2, 5),       # spectral order: the app's rainbow
+    (0, 1, 2, 3, 4, 5, 6, 7),
+]
+
+SPECTRUM = PRESETS[17]   # the seven colours of the rainbow, in order
+
+
+def palette_names(indices):
+    """Render a list of indices as readable colour names."""
+    return " ".join(PALETTE.get(i, "?") for i in indices)
+
+
 def palette(*indices):
     """Encode a palette of up to 8 colours.
 

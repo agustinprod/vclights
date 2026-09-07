@@ -39,7 +39,9 @@ pip install -r requirements.txt
 ```bash
 python -m vclight scan                # lamps in range, family and distance
 python -m vclight modes               # the 18 firmware modes
+python -m vclight colors              # the internal palette
 python -m vclight mode 5 --speed 50   # meteor
+python -m vclight mode 11 --colors 0 6 3 1 4 2 5   # rainbow, spectral order
 python -m vclight scene plasma 120    # perceptual-colour scene
 python -m vclight show                # six scenes with cross-fades
 python -m vclight fx fire 60          # frame-by-frame fire
@@ -147,8 +149,12 @@ Tested on macOS 25.5 with two lamps at once. Firmware modes confirmed
 running on the hardware. The palette encoding reproduces the APK's own
 literals byte for byte, so the protocol is read correctly.
 
-Still open: what each index of the internal palette means, and the
-parameters of opcode `10`.
+The internal palette is decoded: 0 red, 1 green, 2 blue, 3 yellow,
+4 cyan, 5 violet, 6 orange, 7 white. `python -m vclight colors` lists it
+along with the 19 combinations the app itself offers.
+
+Still open: the firmware's exact RGB values for those eight entries, and
+the parameters of opcode `10`.
 
 ## Prior work
 
