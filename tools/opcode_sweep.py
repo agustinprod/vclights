@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Barrido de opcodes, para explorar lo que el APK no cuenta.
+"""Opcode sweep, to explore what the APK does not explain.
 
-Manda opcodes desconocidos uno a uno, con pausa, e imprime cada byte que
-envia. Hay que mirar la lampara mientras corre y apuntar el numero que
-salia por pantalla cuando hizo algo distinto.
+Sends unknown opcodes one at a time, with a pause, printing every byte it
+sends. Watch the lamp while it runs and note the number on screen when
+something changes.
 
-AVISO: escribe bytes arbitrarios en el firmware. Estan excluidos F0, FE
-y FF, que en esta familia de chips suelen ser reset de fabrica, pero el
-resto del espacio de opcodes no esta documentado. Uso bajo tu riesgo.
+WARNING: this writes arbitrary bytes to the firmware. F0, FE and FF are
+excluded, since on this chip family they are usually a factory reset, but
+the rest of the opcode space is undocumented. Use at your own risk.
 
     python tools/opcode_sweep.py 0x04 0x0F
 """
@@ -16,39 +16,39 @@ import sys
 
 sys.path.insert(0, __file__.rsplit("/tools/", 1)[0])
 
-from vclight import discover, Lamp
+from vclight import Lamp, discover
 from vclight import protocol as p
 
-CONOCIDOS = {p.OP_POWER, p.OP_BRIGHTNESS, p.OP_COLOR, p.OP_MODE}
+KNOWN = {p.OP_POWER, p.OP_BRIGHTNESS, p.OP_COLOR, p.OP_MODE}
 
 
-async def main(lo, hi, pausa=2.5):
-    encontradas = await discover(20)
-    if not encontradas:
-        print("sin lamparas al alcance")
+async def main(lo, hi, pause=2.5):
+    found = await discover(20)
+    if not found:
+        print("no lamps in range")
         return
 
-    async with Lamp(encontradas[0].device) as lamp:
-        async def tx(data, espera=pausa):
-            print("  enviando  " + " ".join(f"{b:02x}" for b in data), flush=True)
+    async with Lamp(found[0].device) as lamp:
+        async def tx(data, wait=pause):
+            print("  sending  " + " ".join(f"{b:02x}" for b in data), flush=True)
             await lamp.send(data)
-            await asyncio.sleep(espera)
+            await asyncio.sleep(wait)
 
-        print(f"conectado a {lamp.address[:8]}. Base: blanco fijo.\n")
+        print(f"connected to {lamp.address[:8]}. Baseline: static white.\n")
         await tx(p.cmd_color(255, 255, 255), 1)
         await tx(p.cmd_brightness(255), 1)
         await tx(p.cmd_power(True), 2)
 
         for op in range(lo, hi + 1):
-            if op in CONOCIDOS or op in p.OP_PELIGROSOS:
+            if op in KNOWN or op in p.DANGEROUS_OPCODES:
                 continue
             print(f"--- opcode 0x{op:02x} ---")
             for arg in (0x01, 0x05):
                 await tx(bytes([op, arg]))
-            await tx(p.cmd_color(255, 255, 255), 1.5)   # volver a la base
+            await tx(p.cmd_color(255, 255, 255), 1.5)   # back to baseline
 
-        print("\nfin. Dejo blanco calido.")
-        await tx(p.cmd_color(255, 180, 110), 0.3)
+        print("\ndone. Leaving warm white.")
+        await tx(p.cmd_color(255, 180, 110), 1)
 
 
 if __name__ == "__main__":

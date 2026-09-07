@@ -1,6 +1,6 @@
-"""Control de lamparas LED VC-BLELIGHT (DoHome) sin la app oficial."""
+"""Control VC-BLELIGHT (DoHome) LED lamps without the official app."""
 from .lamp import Found, Group, Lamp, discover
 from .protocol import MODES
 
 __all__ = ["Lamp", "Group", "Found", "discover", "MODES"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

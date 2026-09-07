@@ -1,44 +1,45 @@
-"""Motor de color perceptual: OKLab, OKLCh y correccion de gamma.
+"""Perceptual colour engine: OKLab, OKLCh and gamma correction.
 
-Por que no basta con interpolar en RGB
+Why interpolating in RGB is not enough
 --------------------------------------
-Un fundido de rojo a azul hecho en RGB pasa por (128, 0, 128), un morado
-sucio y oscuro. El ojo no ve el punto medio, ve un bajon de brillo en
-mitad de la transicion. Pasa porque los canales RGB no miden lo que el
-ojo percibe: solo miden cuanta corriente lleva cada LED.
+A red-to-blue fade done in RGB passes through (128, 0, 128), a muddy
+dark purple. The eye does not see a midpoint, it sees the brightness
+collapse halfway through. That happens because RGB channels do not
+measure what the eye perceives: they only measure how much current each
+LED draws.
 
-OKLab si esta construido para que la distancia entre dos colores se
-corresponda con lo que el ojo nota. Interpolar ahi da fundidos de brillo
-constante, y en su version polar, OKLCh, el tono gira por el camino
-cromatico corto en vez de atravesar el centro gris.
+OKLab is built so that distance between two colours matches what the eye
+notices. Interpolating there gives fades of even brightness, and in its
+polar form, OKLCh, the hue takes the short way round the colour wheel
+instead of cutting through grey.
 
-Y la gamma
-----------
-El LED responde de forma lineal a lo que le mandas, pero el ojo no: la
-mitad del valor no se ve como la mitad de luz, sino bastante mas clara.
-Sin corregir, un fundido lineal se come casi todo su recorrido en la
-zona alta y el arranque desde negro es un salto brusco.
+And gamma
+---------
+The LED responds linearly to what you send it; the eye does not. Half
+the value does not look like half the light, it looks considerably
+brighter. Uncorrected, a linear fade spends most of its travel in the
+top end and the climb out of black is an abrupt jump.
 
-Referencia de OKLab: Bjorn Ottosson, 2020.
+OKLab reference: Bjorn Ottosson, 2020.
 """
 import math
 
 GAMMA = 2.2
 
 
-# ------------------------------------------------------------- gamma -----
+# -------------------------------------------------------------- gamma ----
 
 def gamma_encode(v):
-    """De brillo percibido (0-1) al valor que hay que mandar al LED."""
+    """From perceived brightness (0-1) to the value to send the LED."""
     return max(0.0, min(1.0, v)) ** GAMMA
 
 
 def gamma_decode(v):
-    """La inversa: del valor del LED al brillo que se percibe."""
+    """The inverse: from the LED value to the brightness perceived."""
     return max(0.0, min(1.0, v)) ** (1 / GAMMA)
 
 
-# ------------------------------------------------------------- OKLab -----
+# -------------------------------------------------------------- OKLab ----
 
 def srgb_to_linear(c):
     c = max(0.0, min(1.0, c))
@@ -51,7 +52,7 @@ def linear_to_srgb(c):
 
 
 def rgb_to_oklab(r, g, b):
-    """RGB de 0-255 a OKLab. L es luminosidad, a y b los ejes de color."""
+    """RGB 0-255 to OKLab. L is lightness, a and b the colour axes."""
     lr, lg, lb = (srgb_to_linear(x / 255) for x in (r, g, b))
     l = (0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb) ** (1 / 3)
     m = (0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb) ** (1 / 3)
@@ -62,7 +63,7 @@ def rgb_to_oklab(r, g, b):
 
 
 def oklab_to_rgb(L, a, b):
-    """OKLab de vuelta a RGB 0-255, recortado al gamut."""
+    """OKLab back to RGB 0-255, clipped to the gamut."""
     l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
     m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
     s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3
@@ -73,20 +74,21 @@ def oklab_to_rgb(L, a, b):
 
 
 def oklch(L, C, h_deg):
-    """Color en coordenadas polares: luminosidad, croma y tono en grados.
+    """Colour in polar coordinates: lightness, chroma and hue in degrees.
 
-    Mas comodo que OKLab para animar, porque girar el tono es sumar
-    grados y la luminosidad no se toca.
+    Easier than OKLab to animate with, because turning the hue is adding
+    degrees and the lightness stays untouched.
     """
     rad = math.radians(h_deg)
     return oklab_to_rgb(L, C * math.cos(rad), C * math.sin(rad))
 
 
 def mix(c1, c2, k):
-    """Mezcla dos colores RGB por OKLab. k va de 0 a 1.
+    """Blend two RGB colours through OKLab. k runs 0 to 1.
 
-    Esta es la funcion que evita el gris del medio: en OKLab el punto
-    intermedio entre rojo y azul es un morado limpio, no apagado.
+    This is the function that avoids the grey midpoint: in OKLab the
+    halfway point between red and blue is a clean violet, not a muddy
+    one.
     """
     a = rgb_to_oklab(*c1)
     b = rgb_to_oklab(*c2)
@@ -94,10 +96,10 @@ def mix(c1, c2, k):
 
 
 def gradient(colors, t):
-    """Muestrea una rampa de colores en la posicion t, de 0 a 1.
+    """Sample a colour ramp at position t, 0 to 1.
 
-    La rampa es circular: t = 1 vuelve al primer color, asi que sirve
-    para bucles que no dan tirones al cerrarse.
+    The ramp wraps: t = 1 returns to the first colour, so it suits loops
+    that must not jolt when they close.
     """
     n = len(colors)
     pos = (t % 1.0) * n
@@ -105,28 +107,28 @@ def gradient(colors, t):
     return mix(colors[i % n], colors[(i + 1) % n], pos - i)
 
 
-# ------------------------------------------------------------ suavizado --
+# ------------------------------------------------------------- easing ----
 
 def ease_in_out(t):
-    """Curva suave de 0 a 1. Arranca y frena despacio."""
+    """Smooth 0 to 1 curve. Starts and stops gently."""
     t = max(0.0, min(1.0, t))
     return t * t * (3 - 2 * t)
 
 
 def ease_out_expo(t):
-    """Salida exponencial: golpe seco y cola larga. Para destellos."""
+    """Exponential decay: sharp hit, long tail. For flashes."""
     t = max(0.0, min(1.0, t))
     return 1 - 2 ** (-10 * t)
 
 
-# ------------------------------------------------------------- paletas ---
-# Rampas escogidas a mano. Los nombres son descriptivos, no de marca.
+# ----------------------------------------------------------- palettes ----
+# Hand-picked ramps. Names describe the look, not a brand.
 
-PALETAS = {
-    "brasas":    [(255, 30, 0), (255, 120, 10), (255, 200, 60), (140, 20, 0)],
-    "oceano":    [(0, 40, 90), (0, 130, 160), (20, 200, 180), (0, 70, 130)],
-    "atardecer": [(255, 80, 40), (255, 160, 60), (200, 60, 120), (90, 30, 110)],
-    "neon":      [(255, 0, 120), (120, 0, 255), (0, 200, 255), (0, 255, 140)],
-    "bosque":    [(10, 80, 30), (60, 160, 50), (200, 220, 90), (20, 100, 70)],
-    "hielo":     [(180, 230, 255), (80, 150, 255), (230, 240, 255), (40, 90, 200)],
+PALETTES = {
+    "embers": [(255, 30, 0), (255, 120, 10), (255, 200, 60), (140, 20, 0)],
+    "ocean":  [(0, 40, 90), (0, 130, 160), (20, 200, 180), (0, 70, 130)],
+    "sunset": [(255, 80, 40), (255, 160, 60), (200, 60, 120), (90, 30, 110)],
+    "neon":   [(255, 0, 120), (120, 0, 255), (0, 200, 255), (0, 255, 140)],
+    "forest": [(10, 80, 30), (60, 160, 50), (200, 220, 90), (20, 100, 70)],
+    "ice":    [(180, 230, 255), (80, 150, 255), (230, 240, 255), (40, 90, 200)],
 }

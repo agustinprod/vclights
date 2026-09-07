@@ -1,6 +1,6 @@
-"""Descubrimiento y control de lamparas VC-BLELIGHT por BLE.
+"""Discovery and control of VC-BLELIGHT lamps over BLE.
 
-Uso tipico:
+Typical use:
 
     import asyncio
     from vclight import discover, Lamp
@@ -9,7 +9,7 @@ Uso tipico:
         lamps = await discover()
         async with Lamp(lamps[0].device) as lamp:
             await lamp.on()
-            await lamp.mode(8, speed=70)      # meteoro
+            await lamp.mode(5, speed=50)      # meteor
 
     asyncio.run(main())
 """
@@ -24,15 +24,15 @@ from . import protocol as p
 
 @dataclass
 class Found:
-    """Una lampara vista en el escaneo.
+    """A lamp seen during a scan.
 
-    El grupo y el tipo salen del propio anuncio, sin conectar: la lampara
-    los publica en los dos bytes de datos de fabricante.
+    Group and type come from the advertisement itself, without
+    connecting: the lamp publishes them in two manufacturer data bytes.
     """
-    device: object   # BLEDevice de bleak
-    rssi: int        # intensidad de senal en dBm; menos negativo es mas cerca
-    group: int = 0   # familia de aparato, ver protocol.GRUPOS
-    type: int = 0    # forma fisica, ver protocol.TIPOS
+    device: object   # bleak BLEDevice
+    rssi: int        # signal strength in dBm; less negative means closer
+    group: int = 0   # device family, see protocol.GROUPS
+    type: int = 0    # physical shape, see protocol.TYPES
 
     @property
     def address(self):
@@ -40,50 +40,51 @@ class Found:
 
     @property
     def is_magic(self):
-        """True si lleva LEDs direccionables y los efectos se desplazan."""
-        return p.es_magic(self.group)
+        """True when it has addressable LEDs and effects can travel."""
+        return p.is_magic(self.group)
 
     def describe(self):
-        return (f"{p.GRUPOS.get(self.group, '?')} / {p.TIPOS.get(self.type, '?')}"
-                f"  {'direccionable' if self.is_magic else 'color unico'}")
+        return (f"{p.GROUPS.get(self.group, '?')} / {p.TYPES.get(self.type, '?')}"
+                f"  {'addressable' if self.is_magic else 'single colour'}")
 
-    def distancia(self):
-        """Traduce el RSSI a una distancia aproximada, para buscarla a mano.
+    def distance(self):
+        """Turn RSSI into a rough distance, to hunt a lamp down by hand.
 
-        No es una medida: la senal rebota en las paredes y varia varios
-        dB de un segundo a otro. Sirve para el juego de frio o caliente.
+        This is not a measurement: the signal bounces off walls and moves
+        several dB from one second to the next. It is good enough for a
+        game of hot and cold.
         """
-        if self.rssi > -50:  return "muy cerca, menos de 1 m"
-        if self.rssi > -65:  return "cerca, 1 a 3 m"
-        if self.rssi > -80:  return "media, 3 a 8 m"
-        return "lejos, probablemente otra habitacion"
+        if self.rssi > -50:  return "very close, under 1 m"
+        if self.rssi > -65:  return "close, 1 to 3 m"
+        if self.rssi > -80:  return "medium, 3 to 8 m"
+        return "far, probably another room"
 
 
 async def discover(timeout=12.0):
-    """Devuelve las lamparas al alcance, la mas cercana primero.
+    """Return the lamps in range, closest first.
 
-    Una lampara solo se anuncia cuando NO esta conectada a nada. Si no
-    aparece ninguna, lo normal es que la tenga cogida el movil: cierra
-    la app Raingel o apaga el Bluetooth del telefono y repite.
+    A lamp only advertises while it is NOT connected to anything. If none
+    show up, the usual reason is that the phone is holding it: close the
+    Raingel app or turn the phone's Bluetooth off, then retry.
     """
-    encontradas = {}
+    found = {}
 
-    def visto(device, adv):
+    def seen(device, adv):
         if (adv.local_name or device.name or "").upper() != p.DEVICE_NAME:
             return
-        datos = adv.manufacturer_data.get(p.APP_ID, b"")
-        grupo, tipo = (datos[0], datos[1]) if len(datos) >= 2 else (0, 0)
-        encontradas[device.address] = Found(device, adv.rssi, grupo, tipo)
+        data = adv.manufacturer_data.get(p.APP_ID, b"")
+        group, kind = (data[0], data[1]) if len(data) >= 2 else (0, 0)
+        found[device.address] = Found(device, adv.rssi, group, kind)
 
-    scanner = BleakScanner(detection_callback=visto)
+    scanner = BleakScanner(detection_callback=seen)
     await scanner.start()
     await asyncio.sleep(timeout)
     await scanner.stop()
-    return sorted(encontradas.values(), key=lambda f: -f.rssi)
+    return sorted(found.values(), key=lambda f: -f.rssi)
 
 
 class Lamp:
-    """Una lampara conectada. Se usa como context manager asincrono."""
+    """One connected lamp. Used as an async context manager."""
 
     def __init__(self, device, timeout=25.0):
         self.device = device
@@ -101,11 +102,11 @@ class Lamp:
         return self.device.address
 
     async def send(self, data):
-        """Escribe un comando crudo. Sin acuse de recibo: si el comando
-        esta mal, la lampara lo ignora y no hay forma de enterarse."""
+        """Write a raw command. No acknowledgement: a malformed command
+        is ignored and there is no way to find out."""
         await self._client.write_gatt_char(p.CHAR_WRITE, bytearray(data), response=False)
 
-    # ------------------------------------------------------ comandos ----
+    # -------------------------------------------------------- commands ----
 
     async def on(self):
         await self.send(p.cmd_power(True))
@@ -114,55 +115,53 @@ class Lamp:
         await self.send(p.cmd_power(False))
 
     async def brightness(self, level):
-        """Brillo global, 0 a 255."""
+        """Global brightness, 0 to 255."""
         await self.send(p.cmd_brightness(level))
 
     async def rgb(self, r, g, b):
-        """Color fijo. Corta cualquier modo dinamico en curso."""
+        """Static colour. Cancels any dynamic mode in progress."""
         await self.send(p.cmd_color(r, g, b))
 
     async def hsv(self, h, s=1.0, v=1.0):
-        """Igual que rgb pero en tono, saturacion y valor. El tono va de
-        0 a 1 y da la vuelta, asi que es lo comodo para animar colores."""
+        """Same as rgb but in hue, saturation and value. Hue runs 0 to 1
+        and wraps, which makes it the convenient one for animating."""
         r, g, b = colorsys.hsv_to_rgb(h % 1.0, s, v)
         await self.rgb(r * 255, g * 255, b * 255)
 
     async def mode(self, mode_id, speed=50, brightness=100,
                    colors=(0, 1), direction=0, section=0):
-        """Lanza un efecto interno del firmware, de los 18 del catalogo.
+        """Start one of the 18 firmware effects.
 
-        Estos efectos se mueven a lo largo de la tira y los calcula la
-        propia lampara, asi que no gastan ancho de banda BLE ni se cortan
-        si el portatil se aleja.
+        These travel along the strip and the lamp computes them itself,
+        so they cost no BLE bandwidth and do not break up when the laptop
+        wanders off.
 
-        Dos cuidados que cuestan una tarde si no se saben:
+        Two gotchas that cost an afternoon if you do not know them:
 
-        - Un comando de color posterior cancela el modo. Lanza el modo y
-          no mandes nada mas.
-        - No desconectes justo despues. La escritura es sin respuesta y
-          vuelve al instante porque el sistema la encola; si cierras la
-          conexion en ese momento, el paquete se pierde sin avisar.
-          Espera al menos un segundo.
+        - A later colour command cancels the mode. Start the mode and
+          send nothing else.
+        - Do not disconnect right afterwards. The write has no response
+          and returns immediately because the system queues it; closing
+          the connection at that moment loses the packet with no warning.
+          Wait at least a second.
         """
         await self.send(p.cmd_mode(mode_id, speed, brightness, colors, direction, section))
 
     async def ic_length(self, leds):
-        """Ajusta el numero de LEDs declarado. Solo si los efectos se
-        cortan a mitad de la tira."""
+        """Set the declared LED count. Only if effects stop halfway."""
         await self.send(p.cmd_ic_length(leds))
 
     async def ic_order(self, order):
-        """Ajusta el orden de color del chip. Solo si los colores salen
-        cambiados de sitio."""
+        """Set the chip's colour order. Only if colours come out swapped."""
         await self.send(p.cmd_ic_order(order))
 
 
 class Group:
-    """Varias lamparas manejadas como una sola.
+    """Several lamps driven as one.
 
-    Cada comando se manda a todas. No hay sincronia garantizada entre
-    ellas, porque cada conexion BLE tiene su propio ritmo, pero a ojo
-    la diferencia no se aprecia.
+    Every command goes to all of them. There is no guaranteed sync
+    between them, since each BLE connection runs at its own pace, but by
+    eye the difference does not show.
     """
 
     def __init__(self, devices):
