@@ -30,9 +30,18 @@ FPS = 22
 SCENES = {}
 
 
-def scene(name, desc):
+def scene(name, desc, span=None):
+    """Register a scene.
+
+    span is for scenes that have somewhere to get to, like a sunrise.
+    Given one, render() stretches or compresses time so the scene
+    actually completes inside the slot it was given. Without it, a
+    180-second sunrise dropped into a 40-second slot never gets past
+    the first dim red, which is exactly what happened.
+    """
     def deco(fn):
         fn.desc = desc
+        fn.span = span
         SCENES[name] = fn
         return fn
     return deco
@@ -155,12 +164,19 @@ def storm(t, i, n):
         # A bolt is a train of flashes, not a single one.
         bolt = max(0.0, ease_out_expo(1 - d / 0.12) * (1 if int(d * 28) % 2 == 0 else 0.35))
     base = oklch(0.32, 0.09, 265)
-    return mix(base, (255, 255, 255), bolt), 0.18 + 0.82 * bolt
+    # 0.35, not 0.18: brightness is gamma corrected on the way out, and
+    # 0.18 ** 2.2 lands on 6 of 255. The lull between bolts was black.
+    return mix(base, (255, 255, 255), bolt), 0.35 + 0.65 * bolt
 
 
-@scene("sunrise", "Sunrise: from deep red to warm white")
+@scene("sunrise", "Sunrise: from deep red to warm white", span=180)
 def sunrise(t, i, n):
-    """A scene with an ending: it runs 180 s and then holds still."""
+    """A scene that goes somewhere: it climbs for its span, then holds.
+
+    Declaring span=180 lets render() fit the whole climb into whatever
+    time it is given, so it works as a 3-minute wake-up light and as a
+    40-second slot in the show.
+    """
     k = ease_in_out(min(1.0, t / 180))
     color = mix((90, 8, 0), (255, 200, 150), k)
     return color, 0.05 + 0.95 * k
@@ -171,12 +187,18 @@ def sunrise(t, i, n):
 # ---------------------------------------------------------------------------
 
 async def render(group, scene_fn, secs, fps=FPS, t0=0.0):
-    """Draw a scene on the group for a number of seconds."""
+    """Draw a scene on the group for a number of seconds.
+
+    A scene carrying a span has its clock rescaled so the whole arc fits
+    the time available. Scenes without one are ambient and just run.
+    """
     n = len(group)
+    span = getattr(scene_fn, "span", None)
+    rate = (span / secs) if (span and secs > 0) else 1.0
     start = time.time()
     while (t := time.time() - start) < secs:
         for i, lamp in enumerate(group):
-            color, bright = scene_fn(t + t0, i, n)
+            color, bright = scene_fn(t * rate + t0, i, n)
             await lamp.rgb(*color)
             await lamp.brightness(255 * gamma_encode(bright))
         await asyncio.sleep(1 / fps)
@@ -195,7 +217,7 @@ async def transition(group, frm, to, secs=3.0, fps=FPS, t0=0.0):
         k = ease_in_out(t / secs)
         for i, lamp in enumerate(group):
             c1, b1 = frm(t + t0, i, n)
-            c2, b2 = to(t + t0, i, n)
+            c2, b2 = to(t + t0, i, n)   # same instant asked of both
             await lamp.rgb(*mix(c1, c2, k))
             await lamp.brightness(255 * gamma_encode(b1 + (b2 - b1) * k))
         await asyncio.sleep(1 / fps)

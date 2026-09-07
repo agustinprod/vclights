@@ -269,6 +269,35 @@ pictures is less clever and works.
 walks all six colour orders, shows pure red after each, and the right
 value is the panel where the lamp actually looks red.
 
+## Unresolved: intermediate colour values
+
+Fully saturated colours behave correctly. Red, green, blue, yellow,
+cyan, magenta and white all come out right, verified with a camera.
+
+Intermediate values do not, and it is not understood why. Holding red
+at 255 and lowering green and blue together, the hue rotates green,
+blue, violet, cyan, instead of moving towards red:
+
+| Sent | Appeared |
+|---|---|
+| `255, 180, 110` | green |
+| `255, 135, 77` | blue |
+| `255, 112, 60` | violet |
+| `255, 81, 42` | cyan |
+
+No independent-channel model explains that: lowering two channels
+cannot rotate the hue. Something in the firmware is interpreting the
+three bytes as more than three levels, at least on this LIGHT_MAGIC
+strip.
+
+Practical consequence: on these strips only fully saturated colours can
+be relied on from opcode 03. That undercuts computer-side animations,
+which assume arbitrary RGB, and it makes the firmware modes with the
+8-colour palette the sound way to drive the hardware.
+
+Testing this further needs a dark room. Once the room lights are on, the
+tubes wash out in the camera and nothing can be judged.
+
 ## Still unknown
 
 - The firmware's exact RGB values for the eight palette entries. Which

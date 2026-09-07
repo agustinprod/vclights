@@ -23,7 +23,17 @@ from .lamp import Group, discover
 from .scenes import SCENES, render, show
 
 
-async def _group(timeout, order=None):
+def _gain(text):
+    """Parse a --gain argument like "1,0.62,0.55"."""
+    if not text:
+        return None
+    parts = [float(v) for v in text.replace(" ", "").split(",")]
+    if len(parts) != 3:
+        raise SystemExit("--gain needs three numbers, e.g. 1,0.62,0.55")
+    return tuple(parts)
+
+
+async def _group(timeout, order=None, gain=None):
     """Find lamps and wrap them in a group. Fails with a useful message
     when there are none, which is by far the commonest error."""
     found = await discover(timeout)
@@ -35,7 +45,7 @@ async def _group(timeout, order=None):
         sys.exit(1)
     print(f"{len(found)} lamp(s): " +
           ", ".join(f"{f.address[:8]} {f.rssi} dBm" for f in found))
-    return Group([f.device for f in found], color_order=order)
+    return Group([f.device for f in found], color_order=order, gain=gain)
 
 
 async def cmd_scan(args):
@@ -124,7 +134,7 @@ async def cmd_colors(args):
 
 
 async def cmd_mode(args):
-    async with await _group(args.timeout, args.order) as g:
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         await g.on()
         await g.mode(args.id, speed=args.speed, brightness=args.brightness,
                      colors=tuple(args.colors), direction=args.direction,
@@ -142,7 +152,7 @@ async def cmd_fx(args):
         for k, fn in EFFECTS.items():
             print(f"  {k:<10} {fn.desc}")
         return
-    async with await _group(args.timeout, args.order) as g:
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         print(f"effect '{args.name}' for {args.seconds:.0f}s")
         await play(g, args.name, args.seconds)
         print("done")
@@ -155,7 +165,7 @@ async def cmd_scene(args):
         for k, fn in SCENES.items():
             print(f"  {k:<10} {fn.desc}")
         return
-    async with await _group(args.timeout, args.order) as g:
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         await g.on()
         print(f"scene '{args.name}' for {args.seconds:.0f}s")
         try:
@@ -167,7 +177,7 @@ async def cmd_scene(args):
 
 async def cmd_show(args):
     """The full show: six scenes with cross-fades between them."""
-    async with await _group(args.timeout, args.order) as g:
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         await g.on()
         print()
         try:
@@ -178,7 +188,7 @@ async def cmd_show(args):
 
 
 async def cmd_color(args):
-    async with await _group(args.timeout, args.order) as g:
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         await g.on()
         await g.brightness(args.brightness)
         await g.rgb(args.r, args.g, args.b)
@@ -186,7 +196,7 @@ async def cmd_color(args):
 
 
 async def cmd_power(args):
-    async with await _group(args.timeout, args.order) as g:
+    async with await _group(args.timeout, args.order, _gain(args.gain)) as g:
         await (g.on() if args.on else g.off())
         await asyncio.sleep(1.0)
 
@@ -196,6 +206,9 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--timeout", type=float, default=12.0,
                     help="seconds to scan before connecting")
+    ap.add_argument("--gain", type=str, default=None,
+                    help="per-channel gain, e.g. 1,0.62,0.55, to correct warm "
+                         "tones drifting green on these strips")
     ap.add_argument("--order", type=int, default=None,
                     help="send this colour order (opcode 0E) on connecting; "
                          "1 is plain RGB. Use it when colours come out wrong")

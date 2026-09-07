@@ -162,6 +162,19 @@ around with the laptop: the number rises as you close in. It is not a
 distance measurement — the signal bounces off walls — but it works for a
 game of hot and cold.
 
+## Known limitation: only saturated colours are reliable
+
+Red, green, blue, yellow, cyan, magenta and white come out correctly.
+Intermediate values do not, and it is not yet understood why: holding
+red at 255 and lowering green and blue rotates the hue through green,
+blue, violet and cyan rather than approaching red. No independent-channel
+model explains that.
+
+So on these strips the dependable way to get colour is the firmware
+modes with the 8-colour palette. The computer-side scenes and
+animations assume arbitrary RGB and will not render their intended
+colours here. See `docs/protocol.md` for the measurements.
+
 ## Verified with a camera, not by trust
 
 Because the protocol acknowledges nothing, `tools/camera_probe.py` sends

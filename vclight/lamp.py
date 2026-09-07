@@ -90,17 +90,22 @@ class Lamp:
     with the chip's channels in any order, and when the firmware's
     assumption does not match the wiring, every colour comes out
     permuted: you send red and get green. Two lamps of the same model
-    can differ. Passing color_order sends opcode 0E right after
-    connecting, so colours mean what they say.
+    can differ.
 
-    Order 1 is plain RGB and is the right answer for the lamps this was
-    developed against. Use `python -m vclight order --sweep` to find it
-    for yours.
+    Send it ONCE and then leave it alone. The app puts it behind a
+    settings screen for a reason: resending 0E on every connection was
+    tried here and it corrupted colour instead of fixing it. Order 1 is
+    plain RGB. Use `python -m vclight order 1` once per lamp, or
+    `order --sweep` to find yours.
+
+    gain scales each channel on the way out, to compensate the weaker
+    red die. See rgb().
     """
 
-    def __init__(self, device, timeout=25.0, color_order=None):
+    def __init__(self, device, timeout=25.0, color_order=None, gain=None):
         self.device = device
         self.color_order = color_order
+        self.gain = gain
         self._client = BleakClient(device, timeout=timeout)
 
     async def __aenter__(self):
@@ -135,7 +140,16 @@ class Lamp:
         await self.send(p.cmd_brightness(level))
 
     async def rgb(self, r, g, b):
-        """Static colour. Cancels any dynamic mode in progress."""
+        """Static colour. Cancels any dynamic mode in progress.
+
+        If a gain was given, each channel is scaled by it first. The red
+        die on these strips is weaker than the green and blue at partial
+        duty, so warm tones drift green and mid greys drift blue. A gain
+        of roughly (1.0, 0.62, 0.55) pulls them back. See `vclight
+        calibrate`.
+        """
+        if self.gain:
+            r, g, b = (v * k for v, k in zip((r, g, b), self.gain))
         await self.send(p.cmd_color(r, g, b))
 
     async def hsv(self, h, s=1.0, v=1.0):
@@ -180,8 +194,8 @@ class Group:
     eye the difference does not show.
     """
 
-    def __init__(self, devices, color_order=None):
-        self.lamps = [Lamp(d, color_order=color_order) for d in devices]
+    def __init__(self, devices, color_order=None, gain=None):
+        self.lamps = [Lamp(d, color_order=color_order, gain=gain) for d in devices]
 
     async def __aenter__(self):
         for lamp in self.lamps:
@@ -202,10 +216,24 @@ class Group:
         for lamp in self.lamps:
             await lamp.send(data)
 
-    async def on(self):                 await self.send(p.cmd_power(True))
-    async def off(self):                await self.send(p.cmd_power(False))
-    async def rgb(self, r, g, b):       await self.send(p.cmd_color(r, g, b))
-    async def brightness(self, level):  await self.send(p.cmd_brightness(level))
+    # These delegate to each Lamp rather than building the command here.
+    # Anything held per lamp, the channel gain for instance, lives on the
+    # Lamp; a Group that formats its own commands silently ignores it.
+    async def on(self):
+        for lamp in self.lamps:
+            await lamp.on()
+
+    async def off(self):
+        for lamp in self.lamps:
+            await lamp.off()
+
+    async def rgb(self, r, g, b):
+        for lamp in self.lamps:
+            await lamp.rgb(r, g, b)
+
+    async def brightness(self, level):
+        for lamp in self.lamps:
+            await lamp.brightness(level)
 
     async def mode(self, mode_id, **kw):
         await self.send(p.cmd_mode(mode_id, **kw))
